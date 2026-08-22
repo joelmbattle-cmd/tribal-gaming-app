@@ -1,0 +1,248 @@
+// Tribal Gaming Compliance & Licensing Platform — data model
+// Reconciled against: prototype HTML/JS (source of the UX), the PRD (V1),
+// the Data Model Gap Analysis, and the Access-Control Model V1 Draft Proposal.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Auth / roles (R4)
+// ---------------------------------------------------------------------------
+
+enum Role {
+  COMPLIANCE
+  LICENSING
+  APPLICANT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  // For an APPLICANT user, scopes them to exactly one Person profile (R9.3).
+  personId     String?  @unique
+  person       Person?  @relation(fields: [personId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Floor Map (R2) — Areas / Banks / Machines
+// ---------------------------------------------------------------------------
+
+// Singleton row holding the manually-expandable canvas width ("Expand
+// Width" control). The effective width used for layout is always
+// max(mapWidth, extent implied by current bank positions) — auto-grow from
+// dragging banks near the edge never needs to persist here.
+model MapSettings {
+  id       Int @id @default(1)
+  mapWidth Int @default(1560)
+}
+
+model Area {
+  id    String @id @default(cuid())
+  key   String @unique
+  label String
+  // y/h are display-layer state for the pannable/zoomable canvas. Kept
+  // persisted (not derived) so the layout survives across demo sessions —
+  // see Data Model Gap Analysis: "purely a UI/display convenience layered
+  // on top of Area / Bank" is the resolution taken here, but persisted.
+  y       Int
+  h       Int
+  order   Int    @default(0)
+  banks   Bank[]
+}
+
+model Bank {
+  id        String    @id @default(cuid())
+  name      String
+  areaId    String
+  area      Area      @relation(fields: [areaId], references: [id])
+  x         Int
+  y         Int
+  capacity  Int
+  machines  Machine[]
+  createdAt DateTime  @default(now())
+}
+
+enum ComplianceStatus {
+  VERIFIED
+  FLAGGED
+  PENDING
+}
+
+// Lifecycle + Highlight/Flag mirror the "live" Machine Records vocabulary
+// surfaced in the Data Model Gap Analysis. Added alongside ComplianceStatus
+// (not replacing it) — see plan confirmation with project owner.
+enum LifecycleStatus {
+  ACTIVE
+  IN_TRANSIT
+  OUT_OF_SERVICE
+  CONVERTED
+  RETIRED
+}
+
+enum HighlightFlag {
+  NONE
+  CONVERSION_PROJECT
+  REVOCATION
+}
+
+model Machine {
+  id                 String            @id @default(cuid())
+  serial             String            @unique // e.g. EGD-10412
+  assetNumber        String
+  manufacturer       String
+  model              String
+  theme              String
+  parSheet           String
+  sealNumber         String            @default("")
+  complianceStatus   ComplianceStatus  @default(PENDING)
+  lifecycleStatus    LifecycleStatus   @default(ACTIVE)
+  highlightFlag      HighlightFlag     @default(NONE)
+  softwareStatus     String            @default("Compliant") // Compliant / Needs Update / Conditionally Revoked / Revoked
+  statusSince        DateTime          @default(now())
+
+  bankId             String?
+  bank               Bank?             @relation(fields: [bankId], references: [id])
+  seatIndex          Int?
+
+  documents          MachineDocument[]
+  history            MachineHistory[]
+
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([bankId, seatIndex])
+}
+
+model MachineDocument {
+  id        String   @id @default(cuid())
+  machineId String
+  machine   Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  name      String
+  blobUrl   String?
+  date      DateTime @default(now())
+}
+
+model MachineHistory {
+  id        String   @id @default(cuid())
+  machineId String
+  machine   Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  event     String
+}
+
+// Map-level audit stream — separate from per-machine history, matching the
+// prototype's "Recent Map Changes" log and the live Floor Map Planning
+// Change Type field (Move Bank / Add Machines / Remove Machines / Other).
+model MapChangeLog {
+  id         String   @id @default(cuid())
+  changeType String
+  bankName   String
+  areaLabel  String
+  notes      String
+  ts         DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Shipment Management (R3)
+// ---------------------------------------------------------------------------
+
+model Shipment {
+  id         String               @id @default(cuid())
+  carrier    String
+  received   DateTime
+  status     String // Open / Processing / Closed
+  documents  ShipmentDocument[]
+  extracted  ShipmentField[]
+  notify     ShipmentRecipient[]
+  createdAt  DateTime             @default(now())
+}
+
+model ShipmentDocument {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  name       String
+  blobUrl    String?
+  date       DateTime @default(now())
+}
+
+// Simulated AI document scrubbing output — structured key/value pairs.
+model ShipmentField {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  key        String
+  value      String
+}
+
+model ShipmentRecipient {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  email      String
+  sent       Boolean  @default(false)
+}
+
+// ---------------------------------------------------------------------------
+// Self-Exclusion Module (R5) — sensitive, fabricated demo data only
+// ---------------------------------------------------------------------------
+
+model Exclusion {
+  id       String          @id @default(cuid())
+  status   String // Active / Expired
+  enrolled DateTime
+  term     String
+  photoUrl String?
+  notes    ExclusionNote[]
+}
+
+model ExclusionNote {
+  id          String    @id @default(cuid())
+  exclusionId String
+  exclusion   Exclusion @relation(fields: [exclusionId], references: [id], onDelete: Cascade)
+  date        DateTime  @default(now())
+  event       String
+}
+
+// ---------------------------------------------------------------------------
+// Licensing (R6) / Applicant Portal (R9)
+// ---------------------------------------------------------------------------
+
+model Person {
+  id        String           @id @default(cuid())
+  name      String
+  role      String // e.g. "Applicant — Key Employee", "Vendor — Gaming Equipment"
+  status    String // cleared / flagged / investigation
+  documents PersonDocument[]
+  history   PersonHistory[]
+  user      User?
+  createdAt DateTime         @default(now())
+}
+
+model PersonDocument {
+  id        String    @id @default(cuid())
+  personId  String
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  name      String
+  blobUrl   String?
+  date      DateTime?
+  submitted Boolean   @default(true)
+}
+
+model PersonHistory {
+  id       String   @id @default(cuid())
+  personId String
+  person   Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  date     DateTime @default(now())
+  event    String
+}
