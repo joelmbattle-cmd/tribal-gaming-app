@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
-import { sendShipmentNotificationsAction, createShipmentAction, updateShipmentStatusAction } from "@/lib/actions/shipments";
+import { sendShipmentNotificationsAction, createShipmentAction, updateShipmentStatusAction, addShipmentDocumentAction, deleteShipmentDocumentAction } from "@/lib/actions/shipments";
 import { useShellVariant } from "@/components/shell-variant";
+import { useRef } from "react";
 
 export type ShipmentViewItem = {
   id: string;
@@ -26,6 +27,7 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
   const [carrier, setCarrier] = useState("");
   const [emails, setEmails] = useState("");
   const [pending, startTransition] = useTransition();
+  const fileInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const showToast = useToast();
 
@@ -72,6 +74,35 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
     });
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !selected) return;
+
+    startTransition(async () => {
+      try {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(",")[1];
+          await addShipmentDocumentAction(selected, file.name, base64);
+          showToast(`Document "${file.name}" attached`);
+          router.refresh();
+        };
+        reader.readAsDataURL(file);
+      } catch {
+        showToast("Failed to attach document");
+      }
+    });
+  };
+
+  const deleteDocument = (documentId: string) => {
+    startTransition(async () => {
+      await deleteShipmentDocumentAction(documentId);
+      showToast("Document removed");
+      router.refresh();
+    });
+  };
+
   return (
     <div>
       <div className="view-head">
@@ -96,6 +127,8 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
         ))}
       </div>
 
+      <input ref={fileInput} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
+
       <ResponsiveOverlay open={!!selected} onClose={() => setSelected(null)}>
         {shipment && (
           <>
@@ -118,8 +151,19 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
               {shipment.documents.map((d) => (
                 <div className="doc-row" key={d.id}>
                   <span className="doc-icon">▤</span><span className="doc-name">{d.name}</span><span className="doc-meta">{d.date}</span>
+                  <button
+                    className="doc-delete-btn"
+                    onClick={() => deleteDocument(d.id)}
+                    disabled={pending}
+                    title="Delete document"
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
+              <button className="btn" disabled={pending} onClick={() => fileInput.current?.click()} style={{ marginTop: 12 }}>
+                + Attach Document
+              </button>
               <div className="section-label">Notification List</div>
               {shipment.notify.map((n) => (
                 <div className="notify-row" key={n.id}>
