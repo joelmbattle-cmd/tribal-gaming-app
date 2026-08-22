@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
-import { createExclusionAction, uploadExclusionPhotoAction, addExclusionDocumentAction, deleteExclusionDocumentAction } from "@/lib/actions/exclusions";
+import { createExclusionAction, uploadExclusionPhotoAction, addExclusionDocumentAction, deleteExclusionDocumentAction, archiveExclusionAction } from "@/lib/actions/exclusions";
 
 export type ExclusionViewItem = {
   id: string;
@@ -99,6 +99,15 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
     });
   };
 
+  const archive = () => {
+    startTransition(async () => {
+      await archiveExclusionAction(selected!);
+      setSelected(null);
+      showToast("Exclusion archived");
+      router.refresh();
+    });
+  };
+
   return (
     <div>
       <input ref={fileInput} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
@@ -174,6 +183,11 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
               <button className="btn" disabled={pending} onClick={() => fileInput.current?.click()} style={{ marginTop: 12 }}>
                 + Attach Document
               </button>
+              <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
+                <button className="btn" disabled={pending} onClick={archive}>
+                  Archive Exclusion
+                </button>
+              </div>
               <div className="section-label">Case Notes &amp; History</div>
               <div className="ledger">
                 {exclusion.notes.map((h) => (
