@@ -45,3 +45,7 @@ next-env.d.ts
 # AI agent tooling skill docs for editors we're not using in this project
 .agents/
 .windsurf/
+
+# Prisma's local agent-skill cache (symlinks into .agents/, not portable)
+.claude/
+skills-lock.json
