@@ -10,6 +10,7 @@ export default async function ProfilesPage() {
         name: p.name,
         role: p.role,
         status: p.status,
+        photoUrl: p.photoUrl,
         documents: p.documents.map((d) => ({ id: d.id, name: d.name, date: d.date ? d.date.toISOString().slice(0, 10) : null })),
         history: p.history.map((h) => ({ id: h.id, date: h.date.toISOString().slice(0, 10), event: h.event })),
       }))}

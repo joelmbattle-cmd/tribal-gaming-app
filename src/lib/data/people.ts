@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 
 export async function getPersonList() {
   return db.person.findMany({
+    where: { archived: false },
     orderBy: { name: "asc" },
     include: { documents: { orderBy: { date: "asc" } }, history: { orderBy: { date: "asc" } } },
   });

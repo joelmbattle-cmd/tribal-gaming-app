@@ -198,12 +198,24 @@ model ShipmentRecipient {
 // ---------------------------------------------------------------------------
 
 model Exclusion {
-  id       String          @id @default(cuid())
-  status   String // Active / Expired
-  enrolled DateTime
-  term     String
-  photoUrl String?
-  notes    ExclusionNote[]
+  id        String           @id @default(cuid())
+  status    String           // Active / Expired
+  enrolled  DateTime
+  term      String
+  photoUrl  String?
+  documents ExclusionDocument[]
+  notes     ExclusionNote[]
+  archived  Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+model ExclusionDocument {
+  id          String    @id @default(cuid())
+  exclusionId String
+  exclusion   Exclusion @relation(fields: [exclusionId], references: [id], onDelete: Cascade)
+  name        String
+  blobUrl     String?
+  date        DateTime  @default(now())
 }
 
 model ExclusionNote {
@@ -221,11 +233,13 @@ model ExclusionNote {
 model Person {
   id        String           @id @default(cuid())
   name      String
-  role      String // e.g. "Applicant — Key Employee", "Vendor — Gaming Equipment"
-  status    String // cleared / flagged / investigation
+  role      String           // e.g. "Applicant — Key Employee", "Vendor — Gaming Equipment"
+  status    String           // cleared / flagged / investigation
+  photoUrl  String?
   documents PersonDocument[]
   history   PersonHistory[]
   user      User?
+  archived  Boolean          @default(false)
   createdAt DateTime         @default(now())
 }
 
