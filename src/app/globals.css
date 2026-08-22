@@ -406,6 +406,12 @@ body.map-fullscreen .m-fab-edit, body.map-fullscreen .m-fab-more { bottom: calc(
 .doc-name a { color: var(--parchment); text-decoration: none; }
 .doc-name a:hover { color: var(--seal); text-decoration: underline; }
 .doc-meta { color: var(--parchment-dim); font-size: 11px; font-family: var(--font-plex-mono); }
+.doc-delete-btn {
+  background: none; border: none; color: var(--parchment-dim); cursor: pointer; padding: 4px 6px;
+  font-size: 14px; transition: color .15s ease; flex-shrink: 0;
+}
+.doc-delete-btn:hover { color: var(--alert); }
+.doc-delete-btn:disabled { cursor: not-allowed; opacity: 0.5; }
 
 .ledger { position: relative; padding-left: 18px; }
 .ledger::before { content: ''; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 1px; background: var(--hairline-strong); }
