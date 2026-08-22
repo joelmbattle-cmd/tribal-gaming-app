@@ -2,12 +2,14 @@ import { db } from "@/lib/db";
 
 export async function getMachineList() {
   const machines = await db.machine.findMany({
-    include: { bank: true },
+    include: { bank: { include: { area: true } } },
     orderBy: { serial: "asc" },
   });
   return machines.map((m) => ({
     id: m.id,
     serial: m.serial,
+    assetNumber: m.assetNumber,
+    sealNumber: m.sealNumber,
     manufacturer: m.manufacturer,
     model: m.model,
     theme: m.theme,
@@ -15,6 +17,7 @@ export async function getMachineList() {
     softwareStatus: m.softwareStatus,
     statusSince: m.statusSince,
     bankName: m.bank?.name ?? "Unassigned",
+    areaLabel: m.bank?.area?.label ?? "Unknown",
   }));
 }
 
