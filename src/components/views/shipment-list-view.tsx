@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
-import { sendShipmentNotificationsAction } from "@/lib/actions/shipments";
+import { sendShipmentNotificationsAction, createShipmentAction, updateShipmentStatusAction } from "@/lib/actions/shipments";
+import { useShellVariant } from "@/components/shell-variant";
 
 export type ShipmentViewItem = {
   id: string;
@@ -19,7 +20,11 @@ export type ShipmentViewItem = {
 const STATUS_CHIP: Record<string, string> = { Closed: "chip-cleared", Processing: "chip-investigation", Open: "chip-neutral" };
 
 export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] }) {
+  const variant = useShellVariant();
   const [selected, setSelected] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [carrier, setCarrier] = useState("");
+  const [emails, setEmails] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const showToast = useToast();
@@ -34,10 +39,50 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
     });
   };
 
+  const create = () => {
+    if (!carrier.trim()) {
+      showToast("Carrier name is required");
+      return;
+    }
+    const emailList = emails
+      .split(",")
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0);
+
+    startTransition(async () => {
+      try {
+        await createShipmentAction(carrier, emailList);
+        setCarrier("");
+        setEmails("");
+        setShowCreateForm(false);
+        showToast("Shipment created");
+        router.refresh();
+      } catch {
+        showToast("Failed to create shipment");
+      }
+    });
+  };
+
+  const complete = (id: string) => {
+    startTransition(async () => {
+      await updateShipmentStatusAction(id, "Closed");
+      setSelected(null);
+      showToast("Shipment marked as closed");
+      router.refresh();
+    });
+  };
+
   return (
     <div>
-      <div className="view-title">Shipment Management</div>
-      <div className="view-sub">Each shipment has a dedicated folder. AI document scrubbing extracts key fields on receipt.</div>
+      <div className="view-head">
+        <div>
+          <div className="view-title">Shipment Management</div>
+          <div className="view-sub">Each shipment has a dedicated folder. AI document scrubbing extracts key fields on receipt.</div>
+        </div>
+        {variant === "desktop" && (
+          <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Shipment</button>
+        )}
+      </div>
 
       <div className="profiles">
         {shipments.map((s) => (
@@ -82,14 +127,64 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
                   <span className={`notify-status ${n.sent ? "notify-sent" : "notify-unsent"}`}>{n.sent ? "✓ Sent" : "Not sent"}</span>
                 </div>
               ))}
-              <div style={{ marginTop: 16 }}>
+              <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
                 <button className="btn btn-primary" disabled={pending} onClick={() => send(shipment.id)}>
                   Send Prepared Notifications
                 </button>
+                {shipment.status !== "Closed" && (
+                  <button className="btn" disabled={pending} onClick={() => complete(shipment.id)}>
+                    Mark as Closed
+                  </button>
+                )}
               </div>
             </div>
           </>
         )}
+      </ResponsiveOverlay>
+
+      <ResponsiveOverlay open={showCreateForm} onClose={() => setShowCreateForm(false)}>
+        <div className="drawer-head">
+          <div>
+            <div className="drawer-eyebrow">New Shipment</div>
+            <div className="drawer-title">Create Shipment Record</div>
+          </div>
+          <button className="drawer-close" onClick={() => setShowCreateForm(false)}>✕</button>
+        </div>
+        <div className="drawer-body">
+          <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Shipment Details</div>
+          <div className="field-grid">
+            <div>
+              <label className="field-label">Carrier Name</label>
+              <input
+                type="text"
+                placeholder="e.g., FedEx, UPS, DHL"
+                value={carrier}
+                onChange={(e) => setCarrier(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Notification Emails (comma-separated)</label>
+              <input
+                type="text"
+                placeholder="e.g., user1@example.com, user2@example.com"
+                value={emails}
+                onChange={(e) => setEmails(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
+            <button className="btn btn-primary" disabled={pending} onClick={create}>
+              Create Shipment
+            </button>
+            <button className="btn" disabled={pending} onClick={() => setShowCreateForm(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       </ResponsiveOverlay>
     </div>
   );
