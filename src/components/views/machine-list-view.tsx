@@ -18,10 +18,23 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
   const variant = useShellVariant();
   const [selected, setSelected] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const showToast = useToast();
   const router = useRouter();
+
+  const filteredMachines = machines.filter((m) => {
+    if (!search.trim()) return true;
+    const query = search.toLowerCase();
+    return (
+      m.serial.toLowerCase().includes(query) ||
+      m.assetNumber.toLowerCase().includes(query) ||
+      m.sealNumber.toLowerCase().includes(query) ||
+      m.bankName.toLowerCase().includes(query) ||
+      m.areaLabel.toLowerCase().includes(query)
+    );
+  });
 
   const doExport = () => {
     startTransition(async () => {
@@ -80,19 +93,36 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
         )}
       </div>
 
+      <div className="search-box">
+        <input
+          type="text"
+          placeholder="Search by serial, asset, seal, bank, or area..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="search-input"
+        />
+      </div>
+
       <div className="profiles">
-        {machines.map((m) => (
-          <button key={m.id} className="profile-row" onClick={() => setSelected(m.serial)}>
-            <div className="avatar mono">{m.manufacturer[0]}</div>
-            <div>
-              <div className="p-name">{m.model} — {m.theme}</div>
-              <div className="p-id">{m.serial}</div>
-            </div>
-            <div className="p-id p-bank">{m.bankName}</div>
-            <div><span className={`chip ${STATUS_CHIP[m.complianceStatus]}`}>{STATUS_LABEL[m.complianceStatus]}</span></div>
-            <div className="chevron">›</div>
-          </button>
-        ))}
+        {filteredMachines.length > 0 ? (
+          filteredMachines.map((m) => (
+            <button key={m.id} className="profile-row" onClick={() => setSelected(m.serial)}>
+              <div className="avatar mono">{m.manufacturer[0]}</div>
+              <div>
+                <div className="p-name">{m.model} — {m.theme}</div>
+                <div className="p-id">{m.serial}</div>
+              </div>
+              <div className="p-id p-bank">{m.bankName}</div>
+              <div><span className={`chip ${STATUS_CHIP[m.complianceStatus]}`}>{STATUS_LABEL[m.complianceStatus]}</span></div>
+              <div className="chevron">›</div>
+            </button>
+          ))
+        ) : (
+          <div className="empty-state">
+            <div className="empty-text">No machines match "{search}"</div>
+            <div className="empty-sub">Try searching by serial number, asset number, seal number, bank, or area.</div>
+          </div>
+        )}
       </div>
 
       <ActionSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Machine Records Actions" actions={actions} />

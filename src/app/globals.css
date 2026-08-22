@@ -297,6 +297,24 @@ body.map-fullscreen .m-fab-edit, body.map-fullscreen .m-fab-more { bottom: calc(
   background: none; border-left: none; border-right: none; border-top: none; width: 100%; text-align: left; color: inherit;
 }
 .profile-row:hover { background: var(--panel); }
+
+/* Search box */
+.search-box { margin: 0 0 16px 0; }
+.search-input {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--hairline-strong); border-radius: 4px;
+  background: var(--bg); color: var(--text); font-family: inherit; font-size: 13px;
+  transition: border-color .15s ease;
+}
+.search-input:focus { outline: none; border-color: var(--parchment-dim); }
+.search-input::placeholder { color: var(--parchment-dim); opacity: 0.6; }
+
+/* Empty state */
+.empty-state {
+  padding: 40px 20px; text-align: center; color: var(--parchment-dim);
+}
+.empty-text { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+.empty-sub { font-size: 12px; opacity: 0.7; }
+
 .avatar {
   width: 36px; height: 36px; border-radius: 50%; background: var(--panel-lighter); border: 1px solid var(--hairline-strong);
   display: flex; align-items: center; justify-content: center; font-family: var(--font-plex-serif); font-size: 13px; color: var(--parchment-dim); flex-shrink: 0;
@@ -481,6 +499,7 @@ body.map-fullscreen .m-fab-edit, body.map-fullscreen .m-fab-more { bottom: calc(
   .add-bank-form { flex-direction: column; align-items: stretch; }
   .add-bank-form input, .add-bank-form select { width: 100% !important; }
 
+  .search-input { font-size: 16px; } /* Prevent zoom on iOS focus */
   .profile-row { grid-template-columns: 34px 1fr auto; gap: 8px; row-gap: 4px; }
   .profile-row .p-bank { display: none; }
 
