@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
 import { uploadDocument } from "@/lib/blob";
+import { storePhoto } from "@/lib/photo";
 import { revalidatePath } from "next/cache";
 
 export async function createPersonAction(name: string, role: string, status: string) {
@@ -21,19 +22,21 @@ export async function createPersonAction(name: string, role: string, status: str
 export async function uploadPersonPhotoAction(personId: string, formData: FormData) {
   await requireRole("LICENSING");
   const file = formData.get("file") as File | null;
-  const upload = await uploadDocument(file, `people/${personId}/photo`);
+  const photo = await storePhoto(file, `people/${personId}/photo`);
 
-  // Only write photoUrl on a real upload. Writing unconditionally would erase
-  // a photo already on file whenever storage is unavailable or the upload fails.
-  if (upload.status === "uploaded") {
+  // Only write photoUrl on a real store. Writing unconditionally would erase a
+  // photo already on file whenever an upload fails.
+  if (photo.status === "stored") {
     await db.person.update({
       where: { id: personId },
-      data: { photoUrl: upload.url },
+      data: { photoUrl: photo.url },
     });
   }
 
   revalidatePath("/licensing/profiles");
-  return { storage: upload.status };
+  return photo.status === "stored"
+    ? { storage: "stored" as const, inline: photo.inline }
+    : { storage: photo.status };
 }
 
 export async function addPersonDocumentAction(personId: string, formData: FormData) {

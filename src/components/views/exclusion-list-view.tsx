@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
+import { preparePhoto } from "@/lib/image-client";
 import { createExclusionAction, uploadExclusionPhotoAction, addExclusionDocumentAction, deleteExclusionDocumentAction, archiveExclusionAction } from "@/lib/actions/exclusions";
 
 export type ExclusionViewItem = {
@@ -57,17 +58,20 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
     e.target.value = "";
     if (!file || !selected) return;
 
-    const formData = new FormData();
-    formData.set("file", file);
-
     startTransition(async () => {
       try {
+        // Downscale before sending: a camera photo exceeds the server action
+        // body limit and would be rejected before reaching the upload code.
+        const prepared = await preparePhoto(file);
+        const formData = new FormData();
+        formData.set("file", prepared);
+
         const { storage } = await uploadExclusionPhotoAction(selected, formData);
         showToast(
-          storage === "uploaded"
+          storage === "stored"
             ? "Photo updated"
-            : storage === "skipped"
-              ? "Photo not stored — file storage is not configured"
+            : storage === "too-large"
+              ? "Photo is too large to store — try a smaller image"
               : "Photo upload failed — the existing photo was kept",
         );
         router.refresh();
@@ -173,13 +177,24 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
               <button className="drawer-close" onClick={closeRecord}>✕</button>
             </div>
             <div className="drawer-body">
-              <div className="redacted-box">
-                {exclusion.photoUrl ? (
-                  <>🔒 Photo on file — restricted access</>
-                ) : (
-                  <>🔒 No photo on file</>
-                )}
-              </div>
+              {exclusion.photoUrl ? (
+                <>
+                  <div className="photo-frame">
+                    {/* Plain <img>: the source is either a blob URL or an inline
+                        data URL, and next/image handles neither without extra
+                        remote-pattern configuration. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="photo-img"
+                      src={exclusion.photoUrl}
+                      alt={`Photo on file for exclusion case ${exclusion.id}`}
+                    />
+                  </div>
+                  <div className="photo-caption">🔒 Photo on file — restricted access</div>
+                </>
+              ) : (
+                <div className="redacted-box">🔒 No photo on file</div>
+              )}
               <button
                 className="btn"
                 disabled={pending}

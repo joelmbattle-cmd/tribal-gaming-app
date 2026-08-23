@@ -451,6 +451,20 @@ body.map-fullscreen .m-fab-edit, body.map-fullscreen .m-fab-more { bottom: calc(
   font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 20px;
 }
 
+/* Photo on file. Shares the redacted-box footprint so a record does not shift
+   when a photo is added, but switches to a solid border once there is real
+   evidence to show. */
+.photo-frame {
+  border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--panel-light);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  min-height: 120px; margin-bottom: 8px;
+}
+.photo-img { display: block; width: 100%; max-height: 320px; object-fit: contain; }
+.photo-caption {
+  font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--parchment-dim); margin-bottom: 20px;
+}
+
 .notify-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 12px; gap: 10px; }
 .notify-status { font-family: var(--font-plex-mono); font-size: 10px; white-space: nowrap; }
 .notify-sent { color: var(--verify); }

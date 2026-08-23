@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
+import { preparePhoto } from "@/lib/image-client";
 import { createPersonAction, uploadPersonPhotoAction, addPersonDocumentAction, deletePersonDocumentAction, archivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
@@ -64,17 +65,20 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
     e.target.value = "";
     if (!file || !selected) return;
 
-    const formData = new FormData();
-    formData.set("file", file);
-
     startTransition(async () => {
       try {
+        // Downscale before sending: a camera photo exceeds the server action
+        // body limit and would be rejected before reaching the upload code.
+        const prepared = await preparePhoto(file);
+        const formData = new FormData();
+        formData.set("file", prepared);
+
         const { storage } = await uploadPersonPhotoAction(selected, formData);
         showToast(
-          storage === "uploaded"
+          storage === "stored"
             ? "Photo updated"
-            : storage === "skipped"
-              ? "Photo not stored — file storage is not configured"
+            : storage === "too-large"
+              ? "Photo is too large to store — try a smaller image"
               : "Photo upload failed — the existing photo was kept",
         );
         router.refresh();
@@ -183,6 +187,19 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
               <div className="stamp-wrap">
                 <div className={`stamp ${STAMP_CLASS[person.status]}`}>{STAMP_TEXT[person.status]}</div>
               </div>
+              {person.photoUrl && (
+                <div className="photo-frame">
+                  {/* Plain <img>: the source is either a blob URL or an inline
+                      data URL, and next/image handles neither without extra
+                      remote-pattern configuration. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="photo-img"
+                    src={person.photoUrl}
+                    alt={`Photo on file for ${person.name}`}
+                  />
+                </div>
+              )}
               <button
                 className="btn"
                 disabled={pending}
