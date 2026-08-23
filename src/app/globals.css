@@ -58,6 +58,11 @@ a { color: inherit; }
 .btn-primary:hover { background: #d9ad51; color: var(--ink); }
 .btn-small { padding: 5px 10px; font-size: 10.5px; min-height: 30px; }
 .btn-active { background: var(--panel-lighter); color: var(--parchment); border-color: var(--seal); }
+
+/* Destructive confirm affordance. Reuses --alert, matching the hover cue
+   already used by .doc-delete-btn. */
+.btn-danger { border-color: rgba(193, 84, 74, 0.45); color: var(--alert); }
+.btn-danger:hover { border-color: var(--alert); color: var(--alert); background: rgba(193, 84, 74, 0.12); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ---------- Desktop shell ---------- */

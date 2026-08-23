@@ -2,15 +2,16 @@ import { db } from "@/lib/db";
 
 export async function getExclusionList() {
   return db.exclusion.findMany({
+    where: { archived: false },
     orderBy: { enrolled: "desc" },
-    include: { notes: { orderBy: { date: "asc" } } },
+    include: { notes: { orderBy: { date: "asc" } }, documents: { orderBy: { date: "asc" } } },
   });
 }
 
 export async function getExclusion(id: string) {
   return db.exclusion.findUnique({
     where: { id },
-    include: { notes: { orderBy: { date: "asc" } } },
+    include: { notes: { orderBy: { date: "asc" } }, documents: { orderBy: { date: "asc" } } },
   });
 }
 

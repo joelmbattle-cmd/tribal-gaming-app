@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
+import { uploadDocument } from "@/lib/blob";
 import { revalidatePath } from "next/cache";
 
 export async function sendShipmentNotificationsAction(shipmentId: string) {
@@ -35,35 +36,24 @@ export async function updateShipmentStatusAction(shipmentId: string, status: str
   revalidatePath("/compliance/shipments");
 }
 
-export async function addShipmentDocumentAction(shipmentId: string, name: string, fileData?: string) {
+export async function addShipmentDocumentAction(shipmentId: string, formData: FormData) {
   await requireRole("COMPLIANCE");
-  let blobUrl: string | null = null;
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) throw new Error("No file provided");
 
-  if (fileData) {
-    try {
-      const blob = await fetch(process.env.BLOB_UPLOAD_URL || "", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
-        },
-        body: Buffer.from(fileData, "base64"),
-      }).then((r) => r.json() as Promise<{ url?: string }>);
-      blobUrl = blob.url || null;
-    } catch {
-      // Silently fail - document records without blob URL (metadata-only mode)
-    }
-  }
+  const upload = await uploadDocument(file, `shipments/${shipmentId}`);
 
   const doc = await db.shipmentDocument.create({
     data: {
       shipmentId,
-      name,
-      blobUrl,
+      name: file.name,
+      blobUrl: upload.status === "uploaded" ? upload.url : null,
       date: new Date(),
     },
   });
+
   revalidatePath("/compliance/shipments");
-  return doc;
+  return { id: doc.id, storage: upload.status };
 }
 
 export async function deleteShipmentDocumentAction(documentId: string) {

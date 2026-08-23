@@ -79,16 +79,20 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
     e.target.value = "";
     if (!file || !selected) return;
 
+    const formData = new FormData();
+    formData.set("file", file);
+
     startTransition(async () => {
       try {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(",")[1];
-          await addShipmentDocumentAction(selected, file.name, base64);
-          showToast(`Document "${file.name}" attached`);
-          router.refresh();
-        };
-        reader.readAsDataURL(file);
+        const { storage } = await addShipmentDocumentAction(selected, formData);
+        showToast(
+          storage === "uploaded"
+            ? `Document "${file.name}" attached`
+            : storage === "skipped"
+              ? `"${file.name}" recorded — file storage is not configured`
+              : `Upload failed — "${file.name}" recorded without the file`,
+        );
+        router.refresh();
       } catch {
         showToast("Failed to attach document");
       }
