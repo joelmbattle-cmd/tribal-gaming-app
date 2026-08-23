@@ -26,6 +26,9 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
   const variant = useShellVariant();
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  // Holds the id being confirmed. Cleared whenever the drawer opens or closes
+  // so a record can never appear pre-armed when it is reopened.
+  const [confirmingArchive, setConfirmingArchive] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [personStatus, setPersonStatus] = useState("investigation");
@@ -61,16 +64,20 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
     e.target.value = "";
     if (!file || !selected) return;
 
+    const formData = new FormData();
+    formData.set("file", file);
+
     startTransition(async () => {
       try {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(",")[1];
-          await uploadPersonPhotoAction(selected, base64);
-          showToast("Photo updated");
-          router.refresh();
-        };
-        reader.readAsDataURL(file);
+        const { storage } = await uploadPersonPhotoAction(selected, formData);
+        showToast(
+          storage === "uploaded"
+            ? "Photo updated"
+            : storage === "skipped"
+              ? "Photo not stored — file storage is not configured"
+              : "Photo upload failed — the existing photo was kept",
+        );
+        router.refresh();
       } catch {
         showToast("Failed to upload photo");
       }
@@ -82,16 +89,20 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
     e.target.value = "";
     if (!file || !selected) return;
 
+    const formData = new FormData();
+    formData.set("file", file);
+
     startTransition(async () => {
       try {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(",")[1];
-          await addPersonDocumentAction(selected, file.name, base64);
-          showToast(`Document "${file.name}" attached`);
-          router.refresh();
-        };
-        reader.readAsDataURL(file);
+        const { storage } = await addPersonDocumentAction(selected, formData);
+        showToast(
+          storage === "uploaded"
+            ? `Document "${file.name}" attached`
+            : storage === "skipped"
+              ? `"${file.name}" recorded — file storage is not configured`
+              : `Upload failed — "${file.name}" recorded without the file`,
+        );
+        router.refresh();
       } catch {
         showToast("Failed to attach document");
       }
@@ -106,12 +117,27 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
     });
   };
 
+  const openRecord = (id: string) => {
+    setConfirmingArchive(null);
+    setSelected(id);
+  };
+
+  const closeRecord = () => {
+    setConfirmingArchive(null);
+    setSelected(null);
+  };
+
   const archive = () => {
     startTransition(async () => {
-      await archivePersonAction(selected!);
-      setSelected(null);
-      showToast("Profile archived");
-      router.refresh();
+      try {
+        await archivePersonAction(selected!);
+        setConfirmingArchive(null);
+        setSelected(null);
+        showToast("Profile archived");
+        router.refresh();
+      } catch {
+        showToast("Failed to archive profile");
+      }
     });
   };
 
@@ -132,7 +158,7 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
 
       <div className="profiles">
         {people.map((p) => (
-          <button key={p.id} className="profile-row" onClick={() => setSelected(p.id)}>
+          <button key={p.id} className="profile-row" onClick={() => openRecord(p.id)}>
             <div className="avatar">{p.name.split(" ").map((w) => w[0]).join("")}</div>
             <div><div className="p-name">{p.name}</div><div className="p-id">{p.id}</div></div>
             <div className="p-id">{p.role}</div>
@@ -142,7 +168,7 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
         ))}
       </div>
 
-      <ResponsiveOverlay open={!!selected} onClose={() => setSelected(null)}>
+      <ResponsiveOverlay open={!!selected} onClose={closeRecord}>
         {person && (
           <>
             <div className="drawer-head">
@@ -151,7 +177,7 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
                 <div className="drawer-title">{person.name}</div>
                 <div className="p-id" style={{ marginTop: 4 }}>{person.id} · {person.role}</div>
               </div>
-              <button className="drawer-close" onClick={() => setSelected(null)}>✕</button>
+              <button className="drawer-close" onClick={closeRecord}>✕</button>
             </div>
             <div className="drawer-body">
               <div className="stamp-wrap">
@@ -196,9 +222,23 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
                 ))}
               </div>
               <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
-                <button className="btn" disabled={pending} onClick={archive}>
-                  Archive Profile
-                </button>
+                {confirmingArchive === selected ? (
+                  <>
+                    <div className="field-label">
+                      Archiving removes this profile from the active roster. This cannot be undone from the app.
+                    </div>
+                    <button className="btn btn-danger" disabled={pending} onClick={archive}>
+                      Confirm Archive
+                    </button>
+                    <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(null)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(selected)}>
+                    Archive Profile
+                  </button>
+                )}
               </div>
             </div>
           </>

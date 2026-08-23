@@ -21,6 +21,9 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
   const variant = useShellVariant();
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  // Holds the id being confirmed. Cleared whenever the drawer opens or closes
+  // so a record can never appear pre-armed when it is reopened.
+  const [confirmingArchive, setConfirmingArchive] = useState<string | null>(null);
   const [term, setTerm] = useState("");
   const [status, setStatus] = useState("Active");
   const [pending, startTransition] = useTransition();
@@ -54,16 +57,20 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
     e.target.value = "";
     if (!file || !selected) return;
 
+    const formData = new FormData();
+    formData.set("file", file);
+
     startTransition(async () => {
       try {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(",")[1];
-          await uploadExclusionPhotoAction(selected, base64);
-          showToast("Photo updated");
-          router.refresh();
-        };
-        reader.readAsDataURL(file);
+        const { storage } = await uploadExclusionPhotoAction(selected, formData);
+        showToast(
+          storage === "uploaded"
+            ? "Photo updated"
+            : storage === "skipped"
+              ? "Photo not stored — file storage is not configured"
+              : "Photo upload failed — the existing photo was kept",
+        );
+        router.refresh();
       } catch {
         showToast("Failed to upload photo");
       }
@@ -75,16 +82,20 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
     e.target.value = "";
     if (!file || !selected) return;
 
+    const formData = new FormData();
+    formData.set("file", file);
+
     startTransition(async () => {
       try {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(",")[1];
-          await addExclusionDocumentAction(selected, file.name, base64);
-          showToast(`Document "${file.name}" attached`);
-          router.refresh();
-        };
-        reader.readAsDataURL(file);
+        const { storage } = await addExclusionDocumentAction(selected, formData);
+        showToast(
+          storage === "uploaded"
+            ? `Document "${file.name}" attached`
+            : storage === "skipped"
+              ? `"${file.name}" recorded — file storage is not configured`
+              : `Upload failed — "${file.name}" recorded without the file`,
+        );
+        router.refresh();
       } catch {
         showToast("Failed to attach document");
       }
@@ -99,12 +110,27 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
     });
   };
 
+  const openRecord = (id: string) => {
+    setConfirmingArchive(null);
+    setSelected(id);
+  };
+
+  const closeRecord = () => {
+    setConfirmingArchive(null);
+    setSelected(null);
+  };
+
   const archive = () => {
     startTransition(async () => {
-      await archiveExclusionAction(selected!);
-      setSelected(null);
-      showToast("Exclusion archived");
-      router.refresh();
+      try {
+        await archiveExclusionAction(selected!);
+        setConfirmingArchive(null);
+        setSelected(null);
+        showToast("Exclusion archived");
+        router.refresh();
+      } catch {
+        showToast("Failed to archive exclusion");
+      }
     });
   };
 
@@ -125,7 +151,7 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
 
       <div className="profiles">
         {exclusions.map((c) => (
-          <button key={c.id} className="profile-row" onClick={() => setSelected(c.id)}>
+          <button key={c.id} className="profile-row" onClick={() => openRecord(c.id)}>
             <div className="avatar-locked">🔒</div>
             <div><div className="p-name">{c.id}</div><div className="p-id">{c.term}</div></div>
             <div className="p-id">Enrolled {c.enrolled}</div>
@@ -135,7 +161,7 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
         ))}
       </div>
 
-      <ResponsiveOverlay open={!!selected} onClose={() => setSelected(null)}>
+      <ResponsiveOverlay open={!!selected} onClose={closeRecord}>
         {exclusion && (
           <>
             <div className="drawer-head">
@@ -144,7 +170,7 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
                 <div className="drawer-title">{exclusion.id}</div>
                 <div className="p-id" style={{ marginTop: 4 }}>{exclusion.term} · Enrolled {exclusion.enrolled}</div>
               </div>
-              <button className="drawer-close" onClick={() => setSelected(null)}>✕</button>
+              <button className="drawer-close" onClick={closeRecord}>✕</button>
             </div>
             <div className="drawer-body">
               <div className="redacted-box">
@@ -184,9 +210,23 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
                 + Attach Document
               </button>
               <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
-                <button className="btn" disabled={pending} onClick={archive}>
-                  Archive Exclusion
-                </button>
+                {confirmingArchive === selected ? (
+                  <>
+                    <div className="field-label">
+                      Archiving removes this case from the active list. This cannot be undone from the app.
+                    </div>
+                    <button className="btn btn-danger" disabled={pending} onClick={archive}>
+                      Confirm Archive
+                    </button>
+                    <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(null)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(selected)}>
+                    Archive Exclusion
+                  </button>
+                )}
               </div>
               <div className="section-label">Case Notes &amp; History</div>
               <div className="ledger">

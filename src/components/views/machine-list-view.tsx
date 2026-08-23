@@ -119,7 +119,7 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
           ))
         ) : (
           <div className="empty-state">
-            <div className="empty-text">No machines match "{search}"</div>
+            <div className="empty-text">No machines match &ldquo;{search}&rdquo;</div>
             <div className="empty-sub">Try searching by serial number, asset number, seal number, bank, or area.</div>
           </div>
         )}

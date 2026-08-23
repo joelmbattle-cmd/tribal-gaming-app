@@ -124,7 +124,11 @@ export async function attachMachineDocumentAction(serial: string, formData: Form
 
   const file = formData.get("file") as File | null;
   const name = file && file.size > 0 ? file.name : `Field Note.pdf`;
-  const blobUrl = file ? await uploadDocument(file, `machines/${serial}`) : null;
+  const upload = await uploadDocument(file, `machines/${serial}`);
+  // Machines have always surfaced a genuine storage error to the user rather
+  // than silently recording a document with no file; keep that.
+  if (upload.status === "failed") throw new Error("Document upload failed");
+  const blobUrl = upload.status === "uploaded" ? upload.url : null;
 
   await db.$transaction([
     db.machineDocument.create({ data: { machineId: machine.id, name, blobUrl } }),

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
+import { uploadDocument } from "@/lib/blob";
 import { revalidatePath } from "next/cache";
 
 export async function createExclusionAction(term: string, status: string) {
@@ -17,60 +18,41 @@ export async function createExclusionAction(term: string, status: string) {
   return exclusion;
 }
 
-export async function uploadExclusionPhotoAction(exclusionId: string, photoData?: string) {
+export async function uploadExclusionPhotoAction(exclusionId: string, formData: FormData) {
   await requireRole("COMPLIANCE");
-  let photoUrl: string | null = null;
+  const file = formData.get("file") as File | null;
+  const upload = await uploadDocument(file, `exclusions/${exclusionId}/photo`);
 
-  if (photoData) {
-    try {
-      const blob = await fetch(process.env.BLOB_UPLOAD_URL || "", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
-        },
-        body: Buffer.from(photoData, "base64"),
-      }).then((r) => r.json() as Promise<{ url?: string }>);
-      photoUrl = blob.url || null;
-    } catch {
-      // Silently fail - photo-optional mode
-    }
+  // Only write photoUrl on a real upload. Writing unconditionally would erase
+  // a photo already on file whenever storage is unavailable or the upload fails.
+  if (upload.status === "uploaded") {
+    await db.exclusion.update({
+      where: { id: exclusionId },
+      data: { photoUrl: upload.url },
+    });
   }
 
-  await db.exclusion.update({
-    where: { id: exclusionId },
-    data: { photoUrl },
-  });
   revalidatePath("/compliance/exclusions");
+  return { storage: upload.status };
 }
 
-export async function addExclusionDocumentAction(exclusionId: string, name: string, fileData?: string) {
+export async function addExclusionDocumentAction(exclusionId: string, formData: FormData) {
   await requireRole("COMPLIANCE");
-  let blobUrl: string | null = null;
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) throw new Error("No file provided");
 
-  if (fileData) {
-    try {
-      const blob = await fetch(process.env.BLOB_UPLOAD_URL || "", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
-        },
-        body: Buffer.from(fileData, "base64"),
-      }).then((r) => r.json() as Promise<{ url?: string }>);
-      blobUrl = blob.url || null;
-    } catch {
-      // Silently fail - document records without blob URL (metadata-only mode)
-    }
-  }
+  const upload = await uploadDocument(file, `exclusions/${exclusionId}`);
 
   const doc = await db.exclusionDocument.create({
     data: {
       exclusionId,
-      name,
-      blobUrl,
+      name: file.name,
+      blobUrl: upload.status === "uploaded" ? upload.url : null,
     },
   });
+
   revalidatePath("/compliance/exclusions");
-  return doc;
+  return { id: doc.id, storage: upload.status };
 }
 
 export async function deleteExclusionDocumentAction(documentId: string) {
