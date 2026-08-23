@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    # The build runs `prisma migrate deploy`, so it needs a real database.
+    # Running migrations against a throwaway Postgres is the point rather than
+    # an inconvenience: it proves every migration still applies cleanly from an
+    # empty schema before a deploy tries the same thing against Neon.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tribal_gaming_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tribal_gaming_ci?schema=public
+      # Build-time only. NextAuth requires a secret to be present; it never
+      # signs anything a person receives here, and no deployment reads it.
+      AUTH_SECRET: ci-build-secret-not-used-outside-this-job
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` runs the postinstall `prisma generate`, so the generated client
+      # exists before typecheck and lint read from it.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Runs `prisma migrate deploy && next build` — the same command Vercel
+      # runs, against the same migration set.
+      - name: Build
+        run: npm run build
+
+      - name: Verify migrations leave no schema drift
+        run: npx prisma migrate status
