@@ -6,13 +6,36 @@ import { uploadDocument } from "@/lib/blob";
 import { storePhoto } from "@/lib/photo";
 import { revalidatePath } from "next/cache";
 
-export async function createExclusionAction(term: string, status: string) {
-  await requireRole("COMPLIANCE");
+export type ExclusionIntake = {
+  term: string;
+  status: string;
+  personName: string;
+  aliases?: string;
+  dateOfBirth?: string; // yyyy-mm-dd from a date input
+  governmentId?: string;
+  exclusionType: string;
+  expirationDate?: string;
+  restrictions?: string;
+  sourceInitiated?: string;
+};
+
+export async function createExclusionAction(intake: ExclusionIntake) {
+  const user = await requireRole("COMPLIANCE");
   const exclusion = await db.exclusion.create({
     data: {
-      term,
-      status,
+      term: intake.term,
+      status: intake.status,
       enrolled: new Date(),
+      personName: intake.personName,
+      aliases: intake.aliases || null,
+      dateOfBirth: intake.dateOfBirth ? new Date(intake.dateOfBirth) : null,
+      governmentId: intake.governmentId || null,
+      exclusionType: intake.exclusionType,
+      expirationDate: intake.expirationDate ? new Date(intake.expirationDate) : null,
+      restrictions: intake.restrictions || null,
+      sourceInitiated: intake.sourceInitiated || null,
+      createdBy: user.name,
+      lastModifiedBy: user.name,
     },
   });
   revalidatePath("/compliance/exclusions");
@@ -20,7 +43,7 @@ export async function createExclusionAction(term: string, status: string) {
 }
 
 export async function uploadExclusionPhotoAction(exclusionId: string, formData: FormData) {
-  await requireRole("COMPLIANCE");
+  const user = await requireRole("COMPLIANCE");
   const file = formData.get("file") as File | null;
   const photo = await storePhoto(file, `exclusions/${exclusionId}/photo`);
 
@@ -29,7 +52,7 @@ export async function uploadExclusionPhotoAction(exclusionId: string, formData: 
   if (photo.status === "stored") {
     await db.exclusion.update({
       where: { id: exclusionId },
-      data: { photoUrl: photo.url },
+      data: { photoUrl: photo.url, lastModifiedBy: user.name },
     });
   }
 
@@ -40,37 +63,41 @@ export async function uploadExclusionPhotoAction(exclusionId: string, formData: 
 }
 
 export async function addExclusionDocumentAction(exclusionId: string, formData: FormData) {
-  await requireRole("COMPLIANCE");
+  const user = await requireRole("COMPLIANCE");
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) throw new Error("No file provided");
 
   const upload = await uploadDocument(file, `exclusions/${exclusionId}`);
 
-  const doc = await db.exclusionDocument.create({
-    data: {
-      exclusionId,
-      name: file.name,
-      blobUrl: upload.status === "uploaded" ? upload.url : null,
-    },
-  });
+  const [doc] = await db.$transaction([
+    db.exclusionDocument.create({
+      data: {
+        exclusionId,
+        name: file.name,
+        blobUrl: upload.status === "uploaded" ? upload.url : null,
+      },
+    }),
+    db.exclusion.update({ where: { id: exclusionId }, data: { lastModifiedBy: user.name } }),
+  ]);
 
   revalidatePath("/compliance/exclusions");
   return { id: doc.id, storage: upload.status };
 }
 
 export async function deleteExclusionDocumentAction(documentId: string) {
-  await requireRole("COMPLIANCE");
-  await db.exclusionDocument.delete({
+  const user = await requireRole("COMPLIANCE");
+  const doc = await db.exclusionDocument.delete({
     where: { id: documentId },
   });
+  await db.exclusion.update({ where: { id: doc.exclusionId }, data: { lastModifiedBy: user.name } });
   revalidatePath("/compliance/exclusions");
 }
 
 export async function archiveExclusionAction(exclusionId: string) {
-  await requireRole("COMPLIANCE");
+  const user = await requireRole("COMPLIANCE");
   await db.exclusion.update({
     where: { id: exclusionId },
-    data: { archived: true },
+    data: { archived: true, lastModifiedBy: user.name },
   });
   revalidatePath("/compliance/exclusions");
 }

@@ -199,7 +199,10 @@ model ShipmentRecipient {
 
 model Exclusion {
   id        String           @id @default(cuid())
-  status    String           // Active / Expired
+  // Collapses the workspace's two parallel status fields (Status,
+  // Exclusion Status) into one, per the field-expansion task's own note.
+  // Active / Expired / Removed / Under Review
+  status    String
   enrolled  DateTime
   term      String
   photoUrl  String?
@@ -207,6 +210,28 @@ model Exclusion {
   notes     ExclusionNote[]
   archived  Boolean          @default(false)
   createdAt DateTime         @default(now())
+
+  // --- Person Identification ---------------------------------------------
+  // Nullable at the database level so this migration needs no backfill step;
+  // enforced as required by the create form, since a self-exclusion record
+  // that cannot name who it excludes cannot do its job.
+  personName    String?
+  aliases       String?
+  dateOfBirth   DateTime?
+  governmentId  String?   // "Government / Tribal ID"
+
+  // --- Exclusion Details ---------------------------------------------------
+  exclusionType    String?    // Self-Exclusion / Involuntary Exclusion / Other
+  expirationDate   DateTime?
+  restrictions     String?    // "Restrictions / Terms"
+  sourceInitiated  String?    // "Source / How Initiated"
+
+  // --- System & Audit -------------------------------------------------------
+  // Stamped from the acting user's session name rather than a User relation,
+  // so the record preserves who acted even if that account is later removed.
+  createdBy      String?
+  lastModifiedBy String?
+  updatedAt      DateTime  @updatedAt
 }
 
 model ExclusionDocument {
@@ -232,6 +257,9 @@ model ExclusionNote {
 
 model Person {
   id        String           @id @default(cuid())
+  // Already serves as the workspace's "Full Legal Name" field — the seeded
+  // records store full names, and there is no separate short-label use of
+  // this field elsewhere, so no rename was needed to close that gap.
   name      String
   role      String           // e.g. "Applicant — Key Employee", "Vendor — Gaming Equipment"
   status    String           // cleared / flagged / investigation
@@ -241,6 +269,35 @@ model Person {
   user      User?
   archived  Boolean          @default(false)
   createdAt DateTime         @default(now())
+
+  // --- Identification -------------------------------------------------------
+  dateOfBirth  DateTime?
+  contactInfo  String?   // phone / email / address, combined per the workspace's Contact Info field
+
+  // --- License --------------------------------------------------------------
+  licenseType           String?    // Employee / Vendor / Key / Other
+  licenseNumber         String?
+  licenseIssueDate      DateTime?
+  licenseExpirationDate DateTime?
+
+  // --- Application & Status ---------------------------------------------------
+  applicationDate           DateTime?
+  applicationStatus         String?   // Received / Under Review / Additional Info Needed / Accepted / Rejected / Closed
+  backgroundStatus          String?   // Not Started / In Review / Approved / Denied / Needs Info
+  suitabilityDetermination  String?   // Pending / Suitable / Unsuitable
+
+  // --- Investigation Tracking ------------------------------------------------
+  // Free text rather than a User relation: there is no investigator
+  // directory in this app, only the three demo role accounts.
+  assignedInvestigator        String?
+  investigationStartDate      DateTime?
+  investigationCompletionDate DateTime?
+  keyFindings                 String?
+
+  // --- System & Audit ----------------------------------------------------------
+  createdBy      String?
+  lastModifiedBy String?
+  updatedAt      DateTime  @updatedAt
 }
 
 model PersonDocument {
