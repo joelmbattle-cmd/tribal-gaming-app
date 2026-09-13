@@ -367,7 +367,8 @@ async function main() {
       type: "Inbound",
       vendor: "Everi Games",
       carrier: "XPO Logistics",
-      received: new Date("2026-08-09"),
+      shippingDate: new Date("2026-08-06"),
+      estimatedArrivalDate: new Date("2026-08-09"),
       status: "Processing",
       documents: {
         create: [
@@ -401,7 +402,8 @@ async function main() {
       type: "Inbound",
       vendor: "IGT Corporation",
       carrier: "Old Dominion Freight",
-      received: new Date("2026-08-16"),
+      shippingDate: new Date("2026-08-13"),
+      estimatedArrivalDate: new Date("2026-08-16"),
       status: "Open",
       documents: { create: [{ name: "Bill of Lading.pdf", date: new Date("2026-08-16") }] },
       extracted: {
@@ -427,7 +429,8 @@ async function main() {
       type: "Inbound",
       vendor: "Aristocrat Technologies",
       carrier: "XPO Logistics",
-      received: new Date("2026-07-02"),
+      shippingDate: new Date("2026-06-29"),
+      estimatedArrivalDate: new Date("2026-07-02"),
       status: "Closed",
       documents: {
         create: [
@@ -454,7 +457,8 @@ async function main() {
       type: "Outbound",
       vendor: "IGT Corporation",
       carrier: "UPS Freight",
-      received: new Date("2026-08-20"),
+      shippingDate: new Date("2026-08-20"),
+      estimatedArrivalDate: new Date("2026-08-24"),
       status: "Open",
       documents: { create: [{ name: "Return Authorization.pdf", date: new Date("2026-08-20") }] },
       extracted: {

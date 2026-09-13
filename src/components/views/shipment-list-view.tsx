@@ -8,6 +8,7 @@ import {
   sendShipmentNotificationsAction,
   createShipmentAction,
   updateShipmentStatusAction,
+  updateShipmentDetailsAction,
   addShipmentDocumentAction,
   deleteShipmentDocumentAction,
   linkShipmentMachineAction,
@@ -31,7 +32,8 @@ export type ShipmentViewItem = {
   type: string;
   vendor: string;
   carrier: string;
-  received: string;
+  shippingDate: string;
+  estimatedArrivalDate: string | null;
   status: string;
   documents: { id: string; name: string; date: string }[];
   extracted: { id: string; key: string; value: string }[];
@@ -41,14 +43,18 @@ export type ShipmentViewItem = {
 
 const STATUS_CHIP: Record<string, string> = { Closed: "chip-cleared", Processing: "chip-investigation", Open: "chip-neutral" };
 const TYPE_OPTIONS = ["Inbound", "Outbound"] as const;
+type ShipmentType = (typeof TYPE_OPTIONS)[number];
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export function ShipmentListView({ shipments, machines }: { shipments: ShipmentViewItem[]; machines: MachineOption[] }) {
   const variant = useShellVariant();
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [type, setType] = useState<(typeof TYPE_OPTIONS)[number]>("Inbound");
+  const [type, setType] = useState<ShipmentType>("Inbound");
   const [vendor, setVendor] = useState("");
   const [carrier, setCarrier] = useState("");
+  const [shippingDate, setShippingDate] = useState(todayISO());
+  const [estimatedArrivalDate, setEstimatedArrivalDate] = useState("");
   const [emails, setEmails] = useState("");
   const [machineIds, setMachineIds] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
@@ -56,7 +62,18 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
   const router = useRouter();
   const showToast = useToast();
 
+  // Edit-mode state — mirrors the create form's fields, per the brief's
+  // "same fields as create" rule for editing an open shipment.
+  const [editing, setEditing] = useState(false);
+  const [editType, setEditType] = useState<ShipmentType>("Inbound");
+  const [editVendor, setEditVendor] = useState("");
+  const [editCarrier, setEditCarrier] = useState("");
+  const [editShippingDate, setEditShippingDate] = useState("");
+  const [editEstimatedArrivalDate, setEditEstimatedArrivalDate] = useState("");
+  const [editEmails, setEditEmails] = useState("");
+
   const shipment = shipments.find((s) => s.id === selected);
+  const isClosed = shipment?.status === "Closed";
   const linkedIds = new Set(shipment?.machines.map((m) => m.id) ?? []);
   const linkableMachines = machines.filter((m) => !linkedIds.has(m.id));
 
@@ -72,23 +89,39 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
     setType("Inbound");
     setVendor("");
     setCarrier("");
+    setShippingDate(todayISO());
+    setEstimatedArrivalDate("");
     setEmails("");
     setMachineIds([]);
   };
+
+  const parseEmails = (raw: string) =>
+    raw
+      .split(",")
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0);
 
   const create = () => {
     if (!vendor.trim() || !carrier.trim()) {
       showToast("Vendor/Shipper and Carrier are required");
       return;
     }
-    const emailList = emails
-      .split(",")
-      .map((e) => e.trim())
-      .filter((e) => e.length > 0);
+    if (!shippingDate) {
+      showToast("Shipping Date is required");
+      return;
+    }
 
     startTransition(async () => {
       try {
-        await createShipmentAction({ type, vendor: vendor.trim(), carrier: carrier.trim(), notifyEmails: emailList, machineIds });
+        await createShipmentAction({
+          type,
+          vendor: vendor.trim(),
+          carrier: carrier.trim(),
+          shippingDate,
+          estimatedArrivalDate: estimatedArrivalDate || undefined,
+          notifyEmails: parseEmails(emails),
+          machineIds,
+        });
         resetCreateForm();
         setShowCreateForm(false);
         showToast("Shipment created");
@@ -99,10 +132,51 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
     });
   };
 
+  const startEdit = () => {
+    if (!shipment) return;
+    setEditType(shipment.type === "Outbound" ? "Outbound" : "Inbound");
+    setEditVendor(shipment.vendor);
+    setEditCarrier(shipment.carrier);
+    setEditShippingDate(shipment.shippingDate);
+    setEditEstimatedArrivalDate(shipment.estimatedArrivalDate ?? "");
+    setEditEmails(shipment.notify.map((n) => n.email).join(", "));
+    setEditing(true);
+  };
+
+  const saveEdit = () => {
+    if (!shipment) return;
+    if (!editVendor.trim() || !editCarrier.trim()) {
+      showToast("Vendor/Shipper and Carrier are required");
+      return;
+    }
+    if (!editShippingDate) {
+      showToast("Shipping Date is required");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await updateShipmentDetailsAction(shipment.id, {
+          type: editType,
+          vendor: editVendor.trim(),
+          carrier: editCarrier.trim(),
+          shippingDate: editShippingDate,
+          estimatedArrivalDate: editEstimatedArrivalDate || undefined,
+          notifyEmails: parseEmails(editEmails),
+        });
+        setEditing(false);
+        showToast("Shipment details saved");
+        router.refresh();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Failed to save shipment details");
+      }
+    });
+  };
+
   const complete = (id: string) => {
     startTransition(async () => {
       await updateShipmentStatusAction(id, "Closed");
-      setSelected(null);
+      setEditing(false);
       showToast("Shipment marked as closed");
       router.refresh();
     });
@@ -166,6 +240,11 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
     });
   };
 
+  const closeDrawer = () => {
+    setEditing(false);
+    setSelected(null);
+  };
+
   return (
     <div>
       <div className="view-head">
@@ -187,7 +266,7 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
               <span className={`chip ${s.type === "Outbound" ? "chip-investigation" : "chip-neutral"}`} style={{ marginRight: 8 }}>
                 {s.type}
               </span>
-              Received {s.received}
+              Ship {s.shippingDate}{s.estimatedArrivalDate ? ` · Arr ${s.estimatedArrivalDate}` : ""}
             </div>
             <div><span className={`chip ${STATUS_CHIP[s.status] ?? "chip-neutral"}`}>{s.status}</span></div>
             <div className="chevron">›</div>
@@ -197,25 +276,109 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
 
       <input ref={fileInput} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
 
-      <ResponsiveOverlay open={!!selected} onClose={() => setSelected(null)}>
+      <ResponsiveOverlay open={!!selected} onClose={closeDrawer}>
         {shipment && (
           <>
             <div className="drawer-head">
               <div>
                 <div className="drawer-eyebrow">Shipment Record</div>
                 <div className="drawer-title">{shipment.id}</div>
-                <div className="p-id" style={{ marginTop: 4 }}>{shipment.carrier} · Received {shipment.received}</div>
+                <div className="p-id" style={{ marginTop: 4 }}>{shipment.carrier} · Ship {shipment.shippingDate}</div>
               </div>
-              <button className="drawer-close" onClick={() => setSelected(null)}>✕</button>
+              <div className="drawer-head-actions">
+                {!editing && !isClosed && <button className="btn btn-small" onClick={startEdit}>Edit</button>}
+                <button className="drawer-close" onClick={closeDrawer}>✕</button>
+              </div>
             </div>
             <div className="drawer-body">
+              {isClosed && (
+                <div className="redacted-box" style={{ marginBottom: 16 }}>
+                  🔒 This shipment is closed — details are view-only.
+                </div>
+              )}
+
               <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Shipment Details</div>
-              <div className="field-grid">
-                <div><div className="field-label">Type</div><div className="field-value">{shipment.type}</div></div>
-                <div><div className="field-label">Vendor / Shipper</div><div className="field-value">{shipment.vendor || "—"}</div></div>
-                <div><div className="field-label">Carrier</div><div className="field-value">{shipment.carrier}</div></div>
-                <div><div className="field-label">Received</div><div className="field-value">{shipment.received}</div></div>
-              </div>
+              {editing ? (
+                <>
+                  <div className="field-grid">
+                    <div>
+                      <label className="field-label">Type</label>
+                      <select
+                        value={editType}
+                        onChange={(e) => setEditType(e.target.value as ShipmentType)}
+                        className="field-input"
+                        disabled={pending}
+                      >
+                        {TYPE_OPTIONS.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="field-label">Vendor / Shipper</label>
+                      <input
+                        type="text"
+                        value={editVendor}
+                        onChange={(e) => setEditVendor(e.target.value)}
+                        className="field-input"
+                        disabled={pending}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label">Carrier Name</label>
+                      <input
+                        type="text"
+                        value={editCarrier}
+                        onChange={(e) => setEditCarrier(e.target.value)}
+                        className="field-input"
+                        disabled={pending}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label">Shipping Date</label>
+                      <input
+                        type="date"
+                        value={editShippingDate}
+                        onChange={(e) => setEditShippingDate(e.target.value)}
+                        className="field-input"
+                        disabled={pending}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label">Estimated Arrival Date</label>
+                      <input
+                        type="date"
+                        value={editEstimatedArrivalDate}
+                        onChange={(e) => setEditEstimatedArrivalDate(e.target.value)}
+                        className="field-input"
+                        disabled={pending}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label">Notification Emails (comma-separated)</label>
+                      <input
+                        type="text"
+                        value={editEmails}
+                        onChange={(e) => setEditEmails(e.target.value)}
+                        className="field-input"
+                        disabled={pending}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                    <button className="btn btn-primary" disabled={pending} onClick={saveEdit}>Save Changes</button>
+                    <button className="btn" disabled={pending} onClick={() => setEditing(false)}>Cancel</button>
+                  </div>
+                </>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Type</div><div className="field-value">{shipment.type}</div></div>
+                  <div><div className="field-label">Vendor / Shipper</div><div className="field-value">{shipment.vendor || "—"}</div></div>
+                  <div><div className="field-label">Carrier</div><div className="field-value">{shipment.carrier}</div></div>
+                  <div><div className="field-label">Shipping Date</div><div className="field-value">{shipment.shippingDate}</div></div>
+                  <div><div className="field-label">Estimated Arrival Date</div><div className="field-value">{shipment.estimatedArrivalDate || "—"}</div></div>
+                </div>
+              )}
 
               <div className="section-label">AI-Extracted Fields</div>
               <div className="field-grid">
@@ -229,25 +392,29 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                 <div className="doc-row" key={m.id}>
                   <span className="doc-icon">▤</span>
                   <span className="doc-name">{m.serial} — {m.manufacturer} {m.model}{m.archived ? " (Archived)" : ""}</span>
-                  <button
-                    className="doc-delete-btn"
-                    onClick={() => unlinkMachine(m.id)}
-                    disabled={pending}
-                    title="Unlink machine"
-                  >
-                    ✕
-                  </button>
+                  {!isClosed && (
+                    <button
+                      className="doc-delete-btn"
+                      onClick={() => unlinkMachine(m.id)}
+                      disabled={pending}
+                      title="Unlink machine"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               ))}
-              <MachineMultiPicker
-                machines={linkableMachines}
-                selectedIds={[]}
-                onChange={(ids) => {
-                  const added = ids[ids.length - 1];
-                  if (added) linkMachine(added);
-                }}
-                disabled={pending}
-              />
+              {!isClosed && (
+                <MachineMultiPicker
+                  machines={linkableMachines}
+                  selectedIds={[]}
+                  onChange={(ids) => {
+                    const added = ids[ids.length - 1];
+                    if (added) linkMachine(added);
+                  }}
+                  disabled={pending}
+                />
+              )}
 
               <div className="section-label">Shipment Folder ({shipment.documents.length})</div>
               {shipment.documents.map((d) => (
@@ -277,7 +444,7 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                 <button className="btn btn-primary" disabled={pending} onClick={() => send(shipment.id)}>
                   Send Prepared Notifications
                 </button>
-                {shipment.status !== "Closed" && (
+                {!isClosed && (
                   <button className="btn" disabled={pending} onClick={() => complete(shipment.id)}>
                     Mark as Closed
                   </button>
@@ -303,7 +470,7 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
               <label className="field-label">Type</label>
               <select
                 value={type}
-                onChange={(e) => setType(e.target.value as (typeof TYPE_OPTIONS)[number])}
+                onChange={(e) => setType(e.target.value as ShipmentType)}
                 className="field-input"
                 disabled={pending}
               >
@@ -330,6 +497,26 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                 placeholder="Required — e.g., FedEx, UPS, DHL"
                 value={carrier}
                 onChange={(e) => setCarrier(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Shipping Date</label>
+              <input
+                type="date"
+                value={shippingDate}
+                onChange={(e) => setShippingDate(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Estimated Arrival Date</label>
+              <input
+                type="date"
+                value={estimatedArrivalDate}
+                onChange={(e) => setEstimatedArrivalDate(e.target.value)}
                 className="field-input"
                 disabled={pending}
               />

@@ -158,7 +158,8 @@ export async function getMachineDrawerDataAction(serial: string) {
       type: s.type,
       vendor: s.vendor,
       carrier: s.carrier,
-      received: s.received.toISOString().slice(0, 10),
+      shippingDate: s.shippingDate.toISOString().slice(0, 10),
+      estimatedArrivalDate: s.estimatedArrivalDate ? s.estimatedArrivalDate.toISOString().slice(0, 10) : null,
       status: s.status,
     })),
   };

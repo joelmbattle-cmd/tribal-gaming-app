@@ -178,7 +178,10 @@ model Shipment {
   type       String               @default("Inbound") // Inbound / Outbound
   vendor     String               @default("") // Vendor / Shipper — distinct from the freight carrier below
   carrier    String
-  received   DateTime
+  // Renamed at the Prisma layer only — the DB column stays "received" via
+  // @map so this needs no backfill/rename migration, just a field rename.
+  shippingDate         DateTime   @map("received")
+  estimatedArrivalDate DateTime?
   status     String // Open / Processing / Closed
   documents  ShipmentDocument[]
   extracted  ShipmentField[]

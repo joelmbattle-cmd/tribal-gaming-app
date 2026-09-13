@@ -340,7 +340,9 @@ export function MachineDrawerContent({
               <span className="doc-name">
                 {s.id} — {s.type} · {s.vendor || "—"} via {s.carrier}
               </span>
-              <span className="doc-meta">{s.received} · {s.status}</span>
+              <span className="doc-meta">
+                Ship {s.shippingDate}{s.estimatedArrivalDate ? ` · Arr ${s.estimatedArrivalDate}` : ""} · {s.status}
+              </span>
             </div>
           ))
         )}

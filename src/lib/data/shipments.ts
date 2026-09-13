@@ -6,7 +6,7 @@ const machineLinkInclude = {
 
 export async function getShipmentList() {
   return db.shipment.findMany({
-    orderBy: { received: "desc" },
+    orderBy: { shippingDate: "desc" },
     include: { documents: { orderBy: { date: "asc" } }, extracted: true, notify: true, ...machineLinkInclude },
   });
 }
@@ -31,7 +31,7 @@ export async function getShipmentsForMachine(machineId: string) {
   const links = await db.shipmentMachine.findMany({
     where: { machineId },
     include: { shipment: true },
-    orderBy: { shipment: { received: "desc" } },
+    orderBy: { shipment: { shippingDate: "desc" } },
   });
   return links.map((l) => l.shipment);
 }
