@@ -120,6 +120,19 @@ model Machine {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
+  // --- Archive / Restore ---------------------------------------------------
+  // Archiving clears bankId/seatIndex (same shape as removing from a seat) so
+  // the machine drops off the floor map and active list for free; priorBankId
+  // is a plain id (no relation) so restore can still fall back to Unassigned
+  // if that bank was deleted while archived, without a broken FK in between.
+  archived           Boolean           @default(false)
+  archivedAt         DateTime?
+  archivedBy         String?
+  restoredAt         DateTime?
+  restoredBy         String?
+  priorBankId        String?
+  priorSeatIndex     Int?
+
   @@unique([bankId, seatIndex])
 }
 

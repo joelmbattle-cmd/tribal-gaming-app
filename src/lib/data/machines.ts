@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 
-export async function getMachineList() {
+export async function getMachineList(showArchived = false) {
   const machines = await db.machine.findMany({
+    where: { archived: showArchived },
     include: { bank: { include: { area: true } } },
     orderBy: { serial: "asc" },
   });
@@ -16,8 +17,11 @@ export async function getMachineList() {
     complianceStatus: m.complianceStatus,
     softwareStatus: m.softwareStatus,
     statusSince: m.statusSince,
-    bankName: m.bank?.name ?? "Unassigned",
-    areaLabel: m.bank?.area?.label ?? "Unknown",
+    bankName: m.archived ? "— Archived —" : (m.bank?.name ?? "Unassigned"),
+    areaLabel: m.archived ? "—" : (m.bank?.area?.label ?? "Unknown"),
+    archived: m.archived,
+    archivedAt: m.archivedAt ? m.archivedAt.toISOString().slice(0, 10) : null,
+    archivedBy: m.archivedBy,
   }));
 }
 
