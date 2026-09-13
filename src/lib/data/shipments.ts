@@ -3,11 +3,12 @@ import { db } from "@/lib/db";
 const machineLinkInclude = {
   machines: { include: { machine: true }, orderBy: { createdAt: "asc" as const } },
 };
+const extractedInclude = { extracted: { orderBy: { id: "asc" as const } } };
 
 export async function getShipmentList() {
   return db.shipment.findMany({
     orderBy: { shippingDate: "desc" },
-    include: { documents: { orderBy: { date: "asc" } }, extracted: true, notify: true, ...machineLinkInclude },
+    include: { documents: { orderBy: { date: "asc" } }, notify: true, ...extractedInclude, ...machineLinkInclude },
   });
 }
 
@@ -16,8 +17,8 @@ export async function getShipment(id: string) {
     where: { id },
     include: {
       documents: { orderBy: { date: "asc" } },
-      extracted: true,
       notify: true,
+      ...extractedInclude,
       ...machineLinkInclude,
     },
   });
