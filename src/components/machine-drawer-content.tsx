@@ -3,16 +3,17 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useToast } from "@/components/toast";
 import {
+  archiveMachineAction,
   attachMachineDocumentAction,
   getMachineDrawerDataAction,
   setMachineComplianceStatusAction,
+  unarchiveMachineAction,
   updateMachineBankAction,
   updateMachineFieldsAction,
   type MachineDrawerData,
 } from "@/lib/actions/machines";
+import { BankCombobox, NEW_BANK_VALUE } from "@/components/bank-combobox";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
-
-const NEW_BANK_VALUE = "__new__";
 
 const STATUS_LABEL: Record<ComplianceStatus, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
 const STAMP_TEXT: Record<ComplianceStatus, string> = {
@@ -48,10 +49,12 @@ export function MachineDrawerContent({
   const [data, setData] = useState<MachineDrawerData | null>(null);
   const [editing, setEditing] = useState(false);
   const [bankChoice, setBankChoice] = useState("");
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
   if (loadedSerial !== serial) {
     setLoadedSerial(serial);
     setData(null);
     setEditing(false);
+    setConfirmingArchive(false);
   }
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -156,6 +159,33 @@ export function MachineDrawerContent({
     });
   };
 
+  const archive = () => {
+    startTransition(async () => {
+      try {
+        await archiveMachineAction(serial);
+        setConfirmingArchive(false);
+        showToast("Machine archived — removed from the floor map");
+        onChanged?.();
+        onClose();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Could not archive machine");
+      }
+    });
+  };
+
+  const unarchive = () => {
+    startTransition(async () => {
+      try {
+        await unarchiveMachineAction(serial);
+        showToast("Machine restored to the floor map");
+        load();
+        onChanged?.();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Could not restore machine");
+      }
+    });
+  };
+
   const stampClass =
     data.complianceStatus === "VERIFIED" ? "stamp-verified" : data.complianceStatus === "FLAGGED" ? "stamp-flagged" : "stamp-pending";
 
@@ -168,11 +198,17 @@ export function MachineDrawerContent({
           <div className="p-id" style={{ marginTop: 4 }}>{data.serial} · {data.bankName}</div>
         </div>
         <div className="drawer-head-actions">
-          {!editing && <button className="btn btn-small" onClick={startEdit}>Edit</button>}
+          {!editing && !data.archived && <button className="btn btn-small" onClick={startEdit}>Edit</button>}
           <button className="drawer-close" onClick={onClose}>✕</button>
         </div>
       </div>
       <div className="drawer-body">
+        {data.archived && (
+          <div className="redacted-box" style={{ marginBottom: 16 }}>
+            🗄 Archived {data.archivedAt} by {data.archivedBy || "—"}
+            {data.priorBankName ? ` — was in ${data.priorBankName}` : ""}
+          </div>
+        )}
         <div className="stamp-wrap">
           <div className={`stamp ${stampClass}`}>{STAMP_TEXT[data.complianceStatus]}</div>
         </div>
@@ -196,20 +232,7 @@ export function MachineDrawerContent({
             <div className="field-grid">
               <div>
                 <div className="field-label">Bank</div>
-                <select
-                  className="field-input"
-                  value={bankChoice}
-                  onChange={(e) => setBankChoice(e.target.value)}
-                  disabled={pending}
-                >
-                  <option value="">— Unassigned —</option>
-                  <option value={NEW_BANK_VALUE}>+ Create New Bank…</option>
-                  {data.banks.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.occupied}/{b.capacity}) — {b.areaLabel}
-                    </option>
-                  ))}
-                </select>
+                <BankCombobox banks={data.banks} value={bankChoice} onChange={setBankChoice} disabled={pending} />
               </div>
               {bankChoice === NEW_BANK_VALUE && (
                 <>
@@ -256,6 +279,31 @@ export function MachineDrawerContent({
             <div><div className="field-label">Highlight / Flag</div><div className="field-value">{HIGHLIGHT_LABEL[data.highlightFlag]}</div></div>
           </div>
         )}
+
+        <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
+          {data.archived ? (
+            <button className="btn btn-primary" disabled={pending} onClick={unarchive}>
+              Restore Machine
+            </button>
+          ) : confirmingArchive ? (
+            <>
+              <div className="field-label">
+                Archiving removes this machine from the active floor map and Machine Records list. All fields, documents,
+                and audit history are kept and can be restored later.
+              </div>
+              <button className="btn btn-danger" disabled={pending} onClick={archive}>
+                Confirm Archive
+              </button>
+              <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(false)}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(true)}>
+              Archive Machine
+            </button>
+          )}
+        </div>
 
         <div className="section-label">
           Attached Documents ({data.documents.length})

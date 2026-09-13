@@ -115,10 +115,13 @@ export async function getMachineDrawerDataAction(serial: string) {
     getAreas(),
   ]);
   if (!m) return null;
+  const priorBank = m.archived && m.priorBankId
+    ? await db.bank.findUnique({ where: { id: m.priorBankId } })
+    : null;
   return {
     serial: m.serial,
     bankId: m.bankId,
-    bankName: m.bank?.name ?? "Unassigned",
+    bankName: m.archived ? "— Archived —" : (m.bank?.name ?? "Unassigned"),
     banks,
     areas,
     manufacturer: m.manufacturer,
@@ -131,6 +134,12 @@ export async function getMachineDrawerDataAction(serial: string) {
     highlightFlag: m.highlightFlag,
     softwareStatus: m.softwareStatus,
     statusSince: m.statusSince.toISOString().slice(0, 10),
+    archived: m.archived,
+    archivedAt: m.archivedAt ? m.archivedAt.toISOString().slice(0, 10) : null,
+    archivedBy: m.archivedBy,
+    restoredAt: m.restoredAt ? m.restoredAt.toISOString().slice(0, 10) : null,
+    restoredBy: m.restoredBy,
+    priorBankName: priorBank?.name ?? null,
     documents: m.documents.map((d) => ({
       id: d.id,
       name: d.name,
@@ -230,6 +239,82 @@ export async function updateMachineBankAction(serial: string, target: BankTarget
   ]);
 
   await logMapChange("Move Bank", bank.name, bank.area.label, `${serial} reassigned to ${bank.name}, Seat ${seatIndex + 1}`);
+
+  revalidatePath("/compliance/floor");
+  revalidatePath("/compliance/machines");
+  revalidatePath("/compliance/software");
+}
+
+export async function archiveMachineAction(serial: string) {
+  const user = await requireRole("COMPLIANCE");
+  const machine = await db.machine.findUnique({ where: { serial }, include: { bank: { include: { area: true } } } });
+  if (!machine) throw new Error("Machine not found");
+  if (machine.archived) return;
+
+  await db.$transaction([
+    db.machine.update({
+      where: { serial },
+      data: {
+        archived: true,
+        archivedAt: new Date(),
+        archivedBy: user.name,
+        priorBankId: machine.bankId,
+        priorSeatIndex: machine.seatIndex,
+        bankId: null,
+        seatIndex: null,
+      },
+    }),
+    db.machineHistory.create({
+      data: {
+        machineId: machine.id,
+        event: machine.bank
+          ? `Archived by ${user.name} — removed from ${machine.bank.name}, Seat ${(machine.seatIndex ?? 0) + 1}`
+          : `Archived by ${user.name}`,
+      },
+    }),
+  ]);
+
+  if (machine.bank) {
+    await logMapChange("Remove Machines", machine.bank.name, machine.bank.area.label, `${serial} archived and removed from floor`);
+  }
+
+  revalidatePath("/compliance/floor");
+  revalidatePath("/compliance/machines");
+  revalidatePath("/compliance/software");
+}
+
+export async function unarchiveMachineAction(serial: string) {
+  const user = await requireRole("COMPLIANCE");
+  const machine = await db.machine.findUnique({ where: { serial } });
+  if (!machine) throw new Error("Machine not found");
+  if (!machine.archived) return;
+
+  const priorBank = machine.priorBankId
+    ? await db.bank.findUnique({ where: { id: machine.priorBankId }, include: { area: true } })
+    : null;
+  const bank = priorBank ?? (await findOrCreateUnassignedBank());
+
+  const seatIndex = await placeMachineInSeat(bank.id, undefined);
+
+  await db.$transaction([
+    db.machine.update({
+      where: { serial },
+      data: {
+        archived: false,
+        restoredAt: new Date(),
+        restoredBy: user.name,
+        bankId: bank.id,
+        seatIndex,
+        priorBankId: null,
+        priorSeatIndex: null,
+      },
+    }),
+    db.machineHistory.create({
+      data: { machineId: machine.id, event: `Restored by ${user.name} — placed in ${bank.name}, Seat ${seatIndex + 1}` },
+    }),
+  ]);
+
+  await logMapChange("Add Machines", bank.name, bank.area.label, `${serial} restored, Seat ${seatIndex + 1}`);
 
   revalidatePath("/compliance/floor");
   revalidatePath("/compliance/machines");

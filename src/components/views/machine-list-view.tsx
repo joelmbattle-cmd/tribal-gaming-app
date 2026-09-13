@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
@@ -10,23 +10,27 @@ import { MachineDrawerContent } from "@/components/machine-drawer-content";
 import { downloadImportTemplate, exportRowsToExcel, readWorkbookRows } from "@/lib/excel-client";
 import { getMachinesForExportAction, importMachinesAction } from "@/lib/actions/import-export";
 import { createMachineAction } from "@/lib/actions/machines";
+import { BankCombobox, NEW_BANK_VALUE } from "@/components/bank-combobox";
 import type { MachineListItem } from "@/lib/data/machines";
 import type { BankOption, FloorArea } from "@/lib/data/floor";
 
 const STATUS_LABEL: Record<string, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
 const STATUS_CHIP: Record<string, string> = { VERIFIED: "chip-cleared", FLAGGED: "chip-flagged", PENDING: "chip-investigation" };
-const NEW_BANK_VALUE = "__new__";
 
 export function MachineListView({
   machines,
   banks,
   areas,
+  showArchived,
 }: {
   machines: MachineListItem[];
   banks: BankOption[];
   areas: FloorArea[];
+  showArchived: boolean;
 }) {
   const variant = useShellVariant();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -117,6 +121,14 @@ export function MachineListView({
     });
   };
 
+  const toggleShowArchived = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (showArchived) params.delete("archived");
+    else params.set("archived", "1");
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  };
+
   const triggerImport = () => fileInput.current?.click();
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,12 +152,14 @@ export function MachineListView({
     });
   };
 
-  const actions = [
-    { icon: "+", label: "New Machine", onClick: () => setShowCreateForm(true) },
-    { icon: "📄", label: "Download Template", onClick: downloadImportTemplate },
-    { icon: "⭱", label: "Import from Excel", onClick: triggerImport },
-    { icon: "⭳", label: "Export to Excel", onClick: doExport },
-  ];
+  const actions = showArchived
+    ? [{ icon: "⭳", label: "Export to Excel", onClick: doExport }]
+    : [
+        { icon: "+", label: "New Machine", onClick: () => setShowCreateForm(true) },
+        { icon: "📄", label: "Download Template", onClick: downloadImportTemplate },
+        { icon: "⭱", label: "Import from Excel", onClick: triggerImport },
+        { icon: "⭳", label: "Export to Excel", onClick: doExport },
+      ];
 
   return (
     <div>
@@ -153,18 +167,30 @@ export function MachineListView({
 
       <div className="view-head">
         <div>
-          <div className="view-title">Machine Master Records</div>
-          <div className="view-sub">{machines.length} EGDs across the floor. Click a record to review documents and audit history.</div>
+          <div className="view-title">{showArchived ? "Archived Machine Records" : "Machine Master Records"}</div>
+          <div className="view-sub">
+            {showArchived
+              ? `${machines.length} archived EGD${machines.length === 1 ? "" : "s"}. Restore to put a machine back on the floor.`
+              : `${machines.length} EGDs across the floor. Click a record to review documents and audit history.`}
+          </div>
         </div>
         {variant === "desktop" ? (
           <div className="view-actions">
-            <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Machine</button>
-            <button className="btn" onClick={downloadImportTemplate}>📄 Template</button>
-            <button className="btn" onClick={triggerImport}>⭱ Import from Excel</button>
+            <button className="btn" onClick={toggleShowArchived}>{showArchived ? "Show Active" : "Show Archived"}</button>
+            {!showArchived && (
+              <>
+                <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Machine</button>
+                <button className="btn" onClick={downloadImportTemplate}>📄 Template</button>
+                <button className="btn" onClick={triggerImport}>⭱ Import from Excel</button>
+              </>
+            )}
             <button className="btn" onClick={doExport}>⭳ Export to Excel</button>
           </div>
         ) : (
-          <button className="m-icon-btn" onClick={() => setSheetOpen(true)} aria-label="Actions">⋯</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-small" onClick={toggleShowArchived}>{showArchived ? "Active" : "Archived"}</button>
+            <button className="m-icon-btn" onClick={() => setSheetOpen(true)} aria-label="Actions">⋯</button>
+          </div>
         )}
       </div>
 
@@ -179,7 +205,11 @@ export function MachineListView({
       </div>
 
       <div className="profiles">
-        {filteredMachines.length > 0 ? (
+        {machines.length === 0 ? (
+          <div className="field-label" style={{ padding: 16 }}>
+            {showArchived ? "No archived machines." : "No machines yet."}
+          </div>
+        ) : filteredMachines.length > 0 ? (
           filteredMachines.map((m) => (
             <button key={m.id} className="profile-row" onClick={() => setSelected(m.serial)}>
               <div className="avatar mono">{m.manufacturer[0]}</div>
@@ -187,7 +217,9 @@ export function MachineListView({
                 <div className="p-name">{m.model} — {m.theme}</div>
                 <div className="p-id">{m.serial}</div>
               </div>
-              <div className="p-id p-bank">{m.bankName}</div>
+              <div className="p-id p-bank">
+                {showArchived ? `Archived ${m.archivedAt ?? ""} by ${m.archivedBy || "—"}` : m.bankName}
+              </div>
               <div><span className={`chip ${STATUS_CHIP[m.complianceStatus]}`}>{STATUS_LABEL[m.complianceStatus]}</span></div>
               <div className="chevron">›</div>
             </button>
@@ -226,20 +258,7 @@ export function MachineListView({
           <div className="field-grid">
             <div>
               <label className="field-label">Bank</label>
-              <select
-                className="field-input"
-                value={bankId}
-                onChange={(e) => setBankId(e.target.value)}
-                disabled={pending}
-              >
-                <option value="">— Unassigned —</option>
-                <option value={NEW_BANK_VALUE}>+ Create New Bank…</option>
-                {banks.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.occupied}/{b.capacity}) — {b.areaLabel}
-                  </option>
-                ))}
-              </select>
+              <BankCombobox banks={banks} value={bankId} onChange={setBankId} disabled={pending} />
             </div>
             {creatingBank && (
               <>

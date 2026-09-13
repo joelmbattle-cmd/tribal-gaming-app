@@ -155,6 +155,21 @@ export async function addBankAction(name: string, areaKey: string, capacity: num
   return { ...bank, area };
 }
 
+export async function addBankAtAction(name: string, x: number, y: number, capacity: number) {
+  await requireRole("COMPLIANCE");
+  const cap = Math.max(1, Math.min(MAX_BANK_CAPACITY, capacity || 4));
+  const clampedX = Math.max(0, Math.round(x));
+  const clampedY = Math.max(0, Math.round(y));
+  const area = await areaForY(clampedY);
+  const bank = await db.bank.create({
+    data: { name: name.trim() || "New Bank", areaId: area.id, x: clampedX, y: clampedY, capacity: cap },
+  });
+  await ensureCanvasFits(clampedX, clampedY);
+  await logMapChange("Other", bank.name, area.label, `New bank placed in ${area.label}`);
+  revalidatePath("/compliance/floor");
+  return { ...bank, area };
+}
+
 export async function growMapWidthAction(amount: number = EDGE_GROW) {
   await requireRole("COMPLIANCE");
   const settings = await db.mapSettings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });

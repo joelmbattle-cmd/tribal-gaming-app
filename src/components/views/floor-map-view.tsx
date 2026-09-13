@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
@@ -10,7 +10,7 @@ import { MachineDrawerContent } from "@/components/machine-drawer-content";
 import { downloadImportTemplate, exportRowsToExcel, readWorkbookRows } from "@/lib/excel-client";
 import { getMachinesForExportAction, importMachinesAction } from "@/lib/actions/import-export";
 import {
-  addBankAction,
+  addBankAtAction,
   changeBankCapacityAction,
   commitBankMoveAction,
   growMapWidthAction,
@@ -24,6 +24,8 @@ import type { FloorArea, FloorBank, FloorSeat } from "@/lib/data/floor";
 
 const BANK_W = 292;
 const AREA_DOT: Record<string, string> = { main: "dot-main", highlimit: "dot-highlimit", other: "dot-other" };
+const HIGHLIGHT_MS = 2600;
+const LONG_PRESS_MS = 550;
 
 type ChangeLogEntry = { id: string; changeType: string; bankName: string; areaLabel: string; notes: string; ts: string };
 
@@ -63,7 +65,8 @@ export function FloorMapView({
   const mapHeight = areaList.reduce((h, a) => Math.max(h, a.y + a.h), 0);
 
   const [editMode, setEditMode] = useState(false);
-  const [addingBank, setAddingBank] = useState(false);
+  const [placingBank, setPlacingBank] = useState(false);
+  const [bankPopover, setBankPopover] = useState<{ canvasX: number; canvasY: number; screenX: number; screenY: number; areaLabel: string } | null>(null);
   const [zoom, setZoom] = useState(0.85);
   const [panX, setPanX] = useState(20);
   const [panY, setPanY] = useState(10);
@@ -71,21 +74,31 @@ export function FloorMapView({
   const [tapSource, setTapSource] = useState<{ bankId: string; seat: number } | null>(null);
   const [selectedMachine, setSelectedMachine] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [mapQuery, setMapQuery] = useState("");
+  const [mapSearchOpen, setMapSearchOpen] = useState(false);
+  const [highlightBankId, setHighlightBankId] = useState<string | null>(null);
+  const [highlightSerial, setHighlightSerial] = useState<string | null>(null);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
   const panRef = useRef({ x: panX, y: panY });
+  const editModeRef = useRef(editMode);
+  const placingBankRef = useRef(placingBank);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { panRef.current = { x: panX, y: panY }; }, [panX, panY]);
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
+  useEffect(() => { placingBankRef.current = placingBank; }, [placingBank]);
 
   const bankDragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const panDragRef = useRef<{ startX: number; startY: number; origPanX: number; origPanY: number } | null>(null);
   const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
   const dragSourceRef = useRef<{ bankId: string; seat: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const newBankName = useRef<HTMLInputElement>(null);
-  const newBankCap = useRef<HTMLInputElement>(null);
-  const newBankArea = useRef<HTMLSelectElement>(null);
+  const popoverNameRef = useRef<HTMLInputElement>(null);
+  const popoverCapRef = useRef<HTMLInputElement>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressPointRef = useRef<{ x: number; y: number } | null>(null);
+  const mapSearchRef = useRef<HTMLDivElement>(null);
 
   function ensureCanvasFitsLocal(x: number, y: number) {
     setMapWidth((w) => (x + BANK_W + 160 > w ? x + BANK_W + 400 : w));
@@ -100,6 +113,43 @@ export function FloorMapView({
       return list;
     });
   }
+
+  function screenToCanvas(clientX: number, clientY: number) {
+    const viewport = viewportRef.current;
+    if (!viewport) return { x: 0, y: 0 };
+    const rect = viewport.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - panRef.current.x) / zoomRef.current,
+      y: (clientY - rect.top - panRef.current.y) / zoomRef.current,
+    };
+  }
+
+  function areaLabelForY(y: number) {
+    for (const a of areaList) {
+      if (y >= a.y && y < a.y + a.h) return a.label;
+    }
+    return y < areaList[0].y ? areaList[0].label : areaList[areaList.length - 1].label;
+  }
+
+  function openBankPopoverAt(clientX: number, clientY: number) {
+    const { x, y } = screenToCanvas(clientX, clientY);
+    const screenX = Math.min(clientX, window.innerWidth - 280);
+    const screenY = Math.min(clientY, window.innerHeight - 220);
+    setBankPopover({ canvasX: x, canvasY: y, screenX, screenY, areaLabel: areaLabelForY(y) });
+  }
+
+  const confirmBankPlacement = async () => {
+    if (!bankPopover) return;
+    const name = popoverNameRef.current?.value.trim() || `New Bank ${banks.length + 1}`;
+    const cap = parseInt(popoverCapRef.current?.value || "4", 10) || 4;
+    const { canvasX, canvasY } = bankPopover;
+    setBankPopover(null);
+    try {
+      await addBankAtAction(name, canvasX, canvasY, cap);
+      showToast("Bank placed on the floor map");
+      router.refresh();
+    } catch { showToast("Could not add bank"); }
+  };
 
   function getPoint(e: MouseEvent | TouchEvent) {
     if ("touches" in e && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -190,11 +240,31 @@ export function FloorMapView({
         return;
       }
       const target = e.target as HTMLElement;
-      if (target.closest(".bank") || target.closest(".machine") || target.closest(".empty-slot")) return;
+      if (target.closest(".bank") || target.closest(".machine") || target.closest(".empty-slot") || target.closest(".bank-popover")) return;
       const p = getPoint(e);
+      if (placingBankRef.current) {
+        openBankPopoverAt(p.x, p.y);
+        setPlacingBank(false);
+        return;
+      }
       panDragRef.current = { startX: p.x, startY: p.y, origPanX: panRef.current.x, origPanY: panRef.current.y };
+      if (editModeRef.current) {
+        longPressPointRef.current = p;
+        longPressTimerRef.current = window.setTimeout(() => {
+          panDragRef.current = null;
+          longPressTimerRef.current = null;
+          openBankPopoverAt(p.x, p.y);
+        }, LONG_PRESS_MS);
+      }
     }
     function onTouchMove(e: TouchEvent) {
+      if (longPressTimerRef.current && longPressPointRef.current) {
+        const p = getPoint(e);
+        if (Math.hypot(p.x - longPressPointRef.current.x, p.y - longPressPointRef.current.y) > 10) {
+          window.clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      }
       if (e.touches.length === 2 && pinchRef.current) {
         e.preventDefault();
         const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -227,6 +297,10 @@ export function FloorMapView({
       }
     }
     async function onTouchEnd(e: TouchEvent) {
+      if (longPressTimerRef.current) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
       if (e.touches.length < 2) pinchRef.current = null;
       if (bankDragRef.current) {
         const d = bankDragRef.current;
@@ -260,11 +334,32 @@ export function FloorMapView({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && fullscreen) setFullscreen(false);
+      if (e.key !== "Escape") return;
+      if (bankPopover) { setBankPopover(null); return; }
+      if (placingBank) { setPlacingBank(false); return; }
+      if (fullscreen) setFullscreen(false);
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [fullscreen]);
+  }, [fullscreen, bankPopover, placingBank]);
+
+  useEffect(() => {
+    if (!bankPopover) return;
+    function onDocDown(e: MouseEvent) {
+      const el = document.querySelector(".bank-popover");
+      if (el && !el.contains(e.target as Node)) setBankPopover(null);
+    }
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, [bankPopover]);
+
+  useEffect(() => {
+    function onDocDown(e: MouseEvent) {
+      if (mapSearchRef.current && !mapSearchRef.current.contains(e.target as Node)) setMapSearchOpen(false);
+    }
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, []);
 
   const onBankHandleDown = (e: React.MouseEvent | React.TouchEvent, bankId: string) => {
     if (!editMode) return;
@@ -278,8 +373,22 @@ export function FloorMapView({
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest(".bank") || target.closest(".machine") || target.closest(".empty-slot")) return;
+    if (target.closest(".bank") || target.closest(".machine") || target.closest(".empty-slot") || target.closest(".bank-popover")) return;
+    if (placingBank) {
+      openBankPopoverAt(e.clientX, e.clientY);
+      setPlacingBank(false);
+      return;
+    }
     panDragRef.current = { startX: e.clientX, startY: e.clientY, origPanX: panRef.current.x, origPanY: panRef.current.y };
+  };
+
+  const onCanvasContextMenu = (e: React.MouseEvent) => {
+    if (!editMode) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(".bank") || target.closest(".machine") || target.closest(".empty-slot")) return;
+    e.preventDefault();
+    setPlacingBank(false);
+    openBankPopoverAt(e.clientX, e.clientY);
   };
 
   async function moveMachine(srcBankId: string, srcSeat: number, destBankId: string, destSeat: number) {
@@ -332,7 +441,7 @@ export function FloorMapView({
     setTapSource(null);
   };
 
-  const toggleEditMode = () => { setEditMode((v) => !v); setAddingBank(false); setTapSource(null); };
+  const toggleEditMode = () => { setEditMode((v) => !v); setPlacingBank(false); setBankPopover(null); setTapSource(null); };
 
   const setBankArea = async (bankId: string, areaKey: string) => {
     setBanks((bs) => bs.map((b) => (b.id === bankId ? { ...b, areaId: areaList.find((a) => a.key === areaKey)?.id ?? b.areaId } : b)));
@@ -350,17 +459,6 @@ export function FloorMapView({
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Could not change capacity");
     }
-  };
-
-  const addBank = async () => {
-    const name = newBankName.current?.value.trim() || `New Bank ${banks.length + 1}`;
-    const cap = parseInt(newBankCap.current?.value || "4", 10) || 4;
-    const areaKey = newBankArea.current?.value || areaList[0].key;
-    try {
-      await addBankAction(name, areaKey, cap);
-      setAddingBank(false);
-      router.refresh();
-    } catch { showToast("Could not add bank"); }
   };
 
   const growWidth = async () => {
@@ -417,6 +515,43 @@ export function FloorMapView({
 
   const zoomReset = () => { setZoom(0.85); setPanX(20); setPanY(10); };
 
+  type SearchHit = { key: string; label: string; sub: string; bankId: string; machineSerial?: string };
+  const searchIndex: SearchHit[] = useMemo(() => {
+    const hits: SearchHit[] = [];
+    for (const b of banks) {
+      const areaLabel = areaList.find((a) => a.id === b.areaId)?.label ?? "";
+      hits.push({ key: `bank:${b.id}`, label: b.name, sub: `Bank — ${areaLabel}`, bankId: b.id });
+      for (const seat of b.seats) {
+        if (seat) hits.push({ key: `machine:${seat.id}`, label: seat.serial, sub: `${seat.model} — ${b.name}`, bankId: b.id, machineSerial: seat.serial });
+      }
+    }
+    return hits;
+  }, [banks, areaList]);
+
+  const searchResults = useMemo(() => {
+    const q = mapQuery.trim().toLowerCase();
+    if (!q) return [];
+    return searchIndex.filter((h) => h.label.toLowerCase().includes(q) || h.sub.toLowerCase().includes(q)).slice(0, 30);
+  }, [searchIndex, mapQuery]);
+
+  const focusOnHit = (hit: SearchHit) => {
+    const bank = banks.find((b) => b.id === hit.bankId);
+    const viewport = viewportRef.current;
+    if (!bank || !viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const targetZoom = Math.max(zoomRef.current, 1);
+    const cx = bank.x + BANK_W / 2;
+    const cy = bank.y + 90;
+    setZoom(targetZoom);
+    setPanX(rect.width / 2 - cx * targetZoom);
+    setPanY(rect.height / 2 - cy * targetZoom);
+    setHighlightBankId(bank.id);
+    setHighlightSerial(hit.machineSerial ?? null);
+    setMapSearchOpen(false);
+    setMapQuery("");
+    window.setTimeout(() => { setHighlightBankId(null); setHighlightSerial(null); }, HIGHLIGHT_MS);
+  };
+
   const mapActions = [
     { icon: fullscreen ? "✕" : "⛶", label: fullscreen ? "Exit Full Screen" : "Full Screen", onClick: () => setFullscreen((v) => !v) },
     { icon: "↺", label: "Reset View", onClick: zoomReset },
@@ -464,6 +599,28 @@ export function FloorMapView({
             </span>
           ))}
         </div>
+        <div className="combobox map-search" ref={mapSearchRef}>
+          <input
+            type="text"
+            className="search-input map-search-input"
+            placeholder="Find a bank or machine…"
+            value={mapQuery}
+            onChange={(e) => { setMapQuery(e.target.value); setMapSearchOpen(true); }}
+            onFocus={() => setMapSearchOpen(true)}
+            onKeyDown={(e) => { if (e.key === "Escape") { setMapSearchOpen(false); setMapQuery(""); } }}
+          />
+          {mapSearchOpen && mapQuery.trim() && (
+            <div className="combobox-menu">
+              {searchResults.length === 0 && <div className="combobox-empty">No bank or machine matches &ldquo;{mapQuery}&rdquo;</div>}
+              {searchResults.map((hit) => (
+                <button type="button" key={hit.key} className="combobox-option" onMouseDown={(e) => e.preventDefault()} onClick={() => focusOnHit(hit)}>
+                  <span>{hit.label}</span>
+                  <span className="combobox-option-sub">{hit.sub}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {variant === "desktop" && (
           <div className="zoom-controls">
             <button className="btn btn-small" onClick={growWidth}>↔ Expand Width</button>
@@ -481,11 +638,17 @@ export function FloorMapView({
       {variant === "desktop" && <div className={`map-fullscreen-backdrop${fullscreen ? " open" : ""}`} onClick={() => setFullscreen(false)} />}
 
       <div className={variant === "mobile" ? "m-map-wrap" : undefined}>
-        <div ref={viewportRef} className={viewportClass} onMouseDown={onCanvasMouseDown}>
+        <div
+          ref={viewportRef}
+          className={`${viewportClass}${placingBank ? " placing-bank" : ""}`}
+          onMouseDown={onCanvasMouseDown}
+          onContextMenu={onCanvasContextMenu}
+        >
           <div
             className="map-canvas"
             style={{ width: mapWidth, height: mapHeight, transform: `translate(${panX}px,${panY}px) scale(${zoom})` }}
           >
+            <div className="map-extent-tag mono">Floor extent — {mapWidth} × {mapHeight}px</div>
             {areaList.map((a) => (
               <div key={a.key} className="map-zone" style={{ top: a.y, height: a.h }}>
                 <div className="map-zone-label">
@@ -518,6 +681,8 @@ export function FloorMapView({
                 areas={areaList}
                 editMode={editMode}
                 tapSource={tapSource}
+                highlighted={bank.id === highlightBankId}
+                highlightSerial={bank.id === highlightBankId ? highlightSerial : null}
                 onHandleDown={onBankHandleDown}
                 onAreaChange={setBankArea}
                 onCapacity={changeCapacity}
@@ -533,6 +698,20 @@ export function FloorMapView({
               />
             ))}
           </div>
+
+          {bankPopover && (
+            <div className="bank-popover" style={{ left: bankPopover.screenX, top: bankPopover.screenY }} onMouseDown={(e) => e.stopPropagation()}>
+              <div className="bank-popover-head">
+                Place Bank <span className="map-zone-chip">{bankPopover.areaLabel}</span>
+              </div>
+              <input ref={popoverNameRef} type="text" placeholder="Bank name, e.g. Bank 122 — West Wing" autoFocus />
+              <input ref={popoverCapRef} type="number" min={1} max={12} defaultValue={4} placeholder="Capacity" />
+              <div className="bank-popover-actions">
+                <button className="btn btn-primary btn-small" onClick={confirmBankPlacement}>Place Bank</button>
+                <button className="btn btn-small" onClick={() => setBankPopover(null)}>Cancel</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {variant === "mobile" && (
@@ -543,27 +722,30 @@ export function FloorMapView({
               <button className="m-fab" onClick={() => setZoomAt(zoom - 0.15)}>−</button>
             </div>
             <button className={`m-fab-edit${editMode ? " active" : ""}`} onClick={toggleEditMode}>{editMode ? "✓" : "✎"}</button>
+            {editMode && (
+              <button className={`m-fab-add${placingBank ? " active" : ""}`} onClick={() => setPlacingBank((v) => !v)}>
+                {placingBank ? "✕" : "+"}
+              </button>
+            )}
             <button className="m-fab-more" onClick={() => setSheetOpen(true)}>⋯</button>
             {tapSource && <div className="m-tap-hint">Machine selected — tap a seat to move it</div>}
+            {placingBank && <div className="m-tap-hint">Tap anywhere on the map to place the new bank</div>}
           </>
         )}
       </div>
 
       {editMode && (
         <div className={variant === "mobile" ? "m-map-below" : undefined}>
-          {addingBank ? (
-            <div className="add-bank-form">
-              <input type="text" ref={newBankName} placeholder="Bank name, e.g. Bank 122 — West Wing" />
-              <input type="number" ref={newBankCap} placeholder="Capacity" defaultValue={4} min={1} max={12} />
-              <select className="bank-area-select mono" ref={newBankArea}>
-                {areaList.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-              </select>
-              <button className="btn btn-primary" onClick={addBank}>Add</button>
-              <button className="btn" onClick={() => setAddingBank(false)}>Cancel</button>
-            </div>
-          ) : (
-            <button className="btn" style={{ marginTop: 14 }} onClick={() => setAddingBank(true)}>+ Add Bank</button>
-          )}
+          <div className="map-hint" style={{ marginTop: 14 }}>
+            <button className={`btn${placingBank ? " btn-active" : ""}`} onClick={() => setPlacingBank((v) => !v)}>
+              {placingBank ? "✕ Cancel Placement" : "+ Add Bank"}
+            </button>
+            <span className="map-hint-text">
+              {placingBank
+                ? "Click anywhere on the map to place the new bank there."
+                : "Or right-click (long-press on touch) anywhere on the map to place a bank on the spot."}
+            </span>
+          </div>
 
           {changeLog.length > 0 && (
             <div className="map-log">
@@ -604,6 +786,8 @@ function BankView({
   areas,
   editMode,
   tapSource,
+  highlighted,
+  highlightSerial,
   onHandleDown,
   onAreaChange,
   onCapacity,
@@ -616,6 +800,8 @@ function BankView({
   areas: FloorArea[];
   editMode: boolean;
   tapSource: { bankId: string; seat: number } | null;
+  highlighted: boolean;
+  highlightSerial: string | null;
   onHandleDown: (e: React.MouseEvent | React.TouchEvent, bankId: string) => void;
   onAreaChange: (bankId: string, areaKey: string) => void;
   onCapacity: (bankId: string, delta: number) => void;
@@ -625,7 +811,7 @@ function BankView({
 }) {
   const occupiedCount = bank.seats.filter((s) => s).length;
   return (
-    <div className={`bank${editMode ? " edit-mode" : ""}`} style={{ left: bank.x, top: bank.y, width: BANK_W }}>
+    <div className={`bank${editMode ? " edit-mode" : ""}${highlighted ? " bank-highlight" : ""}`} style={{ left: bank.x, top: bank.y, width: BANK_W }}>
       <div className="bank-head">
         <div className="bank-name-row">
           {editMode && (
@@ -676,6 +862,7 @@ function BankView({
             seat={seat}
             selected={!!tapSource && tapSource.bankId === bank.id && tapSource.seat === i}
             editMode={editMode}
+            highlighted={!!seat && seat.serial === highlightSerial}
             onClick={() => onSlotClick(i, !!seat)}
             onDragStart={() => onDragStart(i)}
             onDrop={() => onDrop(i)}
@@ -690,6 +877,7 @@ function SlotView({
   seat,
   selected,
   editMode,
+  highlighted,
   onClick,
   onDragStart,
   onDrop,
@@ -697,6 +885,7 @@ function SlotView({
   seat: FloorSeat;
   selected: boolean;
   editMode: boolean;
+  highlighted: boolean;
   onClick: () => void;
   onDragStart: () => void;
   onDrop: () => void;
@@ -705,7 +894,7 @@ function SlotView({
   if (seat) {
     return (
       <div
-        className={`machine${editMode ? " draggable-tile" : ""}${selected ? " slot-selected" : ""}${dragOver ? " slot-dragover" : ""}`}
+        className={`machine${editMode ? " draggable-tile" : ""}${selected ? " slot-selected" : ""}${dragOver ? " slot-dragover" : ""}${highlighted ? " machine-highlight" : ""}`}
         draggable={editMode}
         onDragStart={editMode ? onDragStart : undefined}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
