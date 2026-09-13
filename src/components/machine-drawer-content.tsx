@@ -10,9 +10,8 @@ import {
   updateMachineFieldsAction,
   type MachineDrawerData,
 } from "@/lib/actions/machines";
+import { BankCombobox, NEW_BANK_VALUE } from "@/components/bank-combobox";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
-
-const NEW_BANK_VALUE = "__new__";
 
 const STATUS_LABEL: Record<ComplianceStatus, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
 const STAMP_TEXT: Record<ComplianceStatus, string> = {
@@ -196,20 +195,7 @@ export function MachineDrawerContent({
             <div className="field-grid">
               <div>
                 <div className="field-label">Bank</div>
-                <select
-                  className="field-input"
-                  value={bankChoice}
-                  onChange={(e) => setBankChoice(e.target.value)}
-                  disabled={pending}
-                >
-                  <option value="">— Unassigned —</option>
-                  <option value={NEW_BANK_VALUE}>+ Create New Bank…</option>
-                  {data.banks.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.occupied}/{b.capacity}) — {b.areaLabel}
-                    </option>
-                  ))}
-                </select>
+                <BankCombobox banks={data.banks} value={bankChoice} onChange={setBankChoice} disabled={pending} />
               </div>
               {bankChoice === NEW_BANK_VALUE && (
                 <>

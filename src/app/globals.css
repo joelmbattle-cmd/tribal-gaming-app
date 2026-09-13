@@ -198,8 +198,20 @@ body.map-fullscreen .m-header, body.map-fullscreen .m-tabbar, body.map-fullscree
 body.map-fullscreen .m-content { padding: 0; }
 body.map-fullscreen .m-map-wrap { margin: 0; }
 
-.map-canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-.map-zone { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--hairline-strong); background: rgba(239, 231, 214, 0.012); transition: background .15s ease; }
+.map-canvas {
+  position: absolute; top: 0; left: 0; transform-origin: 0 0;
+  outline: 3px solid var(--seal); outline-offset: 0;
+  box-shadow: 0 0 0 8px rgba(200, 155, 60, 0.06), 0 0 30px rgba(200, 155, 60, 0.12);
+  background: rgba(200, 155, 60, 0.02);
+}
+.map-viewport.placing-bank, .m-map-viewport.placing-bank { cursor: crosshair; }
+.map-extent-tag {
+  position: absolute; right: 8px; bottom: 6px; font-size: 9.5px; letter-spacing: 0.06em;
+  color: var(--parchment-dim); background: rgba(8, 10, 13, 0.55); border: 1px solid var(--hairline-strong);
+  border-radius: 3px; padding: 3px 8px; pointer-events: none; z-index: 3;
+}
+.map-zone { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--hairline-strong); background: rgba(239, 231, 214, 0.012); transition: background .15s ease; }
+.map-zone:first-child { border-top: none; }
 .map-zone.zone-target { background: rgba(200, 155, 60, 0.08); border-top-color: var(--seal); }
 .map-zone-label {
   position: absolute; top: 8px; left: 12px; font-family: var(--font-plex-mono); font-size: 10px;
@@ -264,14 +276,6 @@ body.map-fullscreen .m-map-wrap { margin: 0; }
 .slot-selected { border-color: var(--seal) !important; box-shadow: 0 0 0 2px var(--seal) inset !important; opacity: 1 !important; }
 .slot-dragover { border-color: var(--seal) !important; background: rgba(200, 155, 60, 0.14) !important; opacity: 1 !important; }
 
-.add-bank-form { border: 1px dashed var(--hairline-strong); border-radius: 6px; padding: 14px 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.add-bank-form input, .add-bank-form select {
-  background: var(--panel-light); border: 1px solid var(--hairline-strong); color: var(--parchment);
-  font-family: var(--font-plex-mono); font-size: 12px; padding: 8px 10px; border-radius: 4px;
-}
-.add-bank-form input[name="bname"] { width: 240px; max-width: 100%; }
-.add-bank-form input[name="cap"] { width: 80px; }
-
 .map-log-hint { font-size: 10px; color: var(--parchment-dim); text-transform: none; letter-spacing: 0; font-family: var(--font-plex-sans); }
 .map-log-row { display: grid; grid-template-columns: 130px 1fr 100px 1.4fr 90px; gap: 12px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--hairline); font-size: 11.5px; }
 .map-log-type { color: var(--seal); font-family: var(--font-plex-mono); font-size: 10.5px; }
@@ -300,7 +304,57 @@ body.map-fullscreen .m-fab-edit, body.map-fullscreen .m-fab-more { bottom: calc(
   background: var(--seal); color: var(--ink); font-family: var(--font-plex-mono); font-size: 11px; padding: 8px 14px;
   border-radius: 20px; z-index: 31; white-space: nowrap; font-weight: 600;
 }
+.m-fab-add {
+  position: fixed; right: 16px; width: 44px; height: 44px; border-radius: 50%; background: var(--panel-lighter);
+  color: var(--parchment); font-size: 18px; border: 1px solid var(--hairline-strong);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); z-index: 30; bottom: calc(var(--tabbar-h) + var(--safe-b) + 76px);
+}
+.m-fab-add.active { background: var(--seal); color: var(--ink); border-color: var(--seal); }
+body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
 .m-map-below { margin-top: 16px; }
+
+.map-hint { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.map-hint-text { font-size: 11px; color: var(--parchment-dim); line-height: 1.4; }
+
+/* ---------- Bank placement popover (right-click / long-press / "+ Add Bank") ---------- */
+.bank-popover {
+  position: fixed; z-index: 200; width: 250px; background: var(--panel); border: 1px solid var(--seal);
+  border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.bank-popover-head { font-family: var(--font-plex-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--parchment-dim); display: flex; align-items: center; gap: 8px; }
+.bank-popover input {
+  width: 100%; background: var(--panel-light); border: 1px solid var(--hairline-strong); color: var(--parchment);
+  font-family: var(--font-plex-mono); font-size: 12.5px; padding: 8px 10px; border-radius: 4px;
+}
+.bank-popover input:focus { outline: none; border-color: var(--seal); }
+.bank-popover-actions { display: flex; gap: 8px; margin-top: 2px; }
+
+/* ---------- Bank/machine search highlight (Interactive Floor Map find) ---------- */
+@keyframes bank-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(200, 155, 60, 0.55), 0 4px 14px rgba(0, 0, 0, 0.25); } 50% { box-shadow: 0 0 0 8px rgba(200, 155, 60, 0), 0 4px 14px rgba(0, 0, 0, 0.25); } }
+.bank-highlight { border-color: var(--seal) !important; z-index: 20; animation: bank-pulse 1.1s ease-out 2; }
+.machine-highlight { border-color: var(--seal) !important; box-shadow: 0 0 0 2px var(--seal) inset !important; }
+
+/* ---------- Searchable combobox (bank picker, floor map find) ---------- */
+.combobox { position: relative; }
+.combobox-input { cursor: text; }
+.combobox-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 280px; overflow-y: auto; z-index: 60;
+  background: var(--panel); border: 1px solid var(--hairline-strong); border-radius: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+.combobox-option {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left;
+  background: none; border: none; border-bottom: 1px solid var(--hairline); color: var(--parchment);
+  padding: 9px 12px; font-size: 12.5px; cursor: pointer;
+}
+.combobox-option:last-child { border-bottom: none; }
+.combobox-option:hover, .combobox-option.active { background: var(--panel-light); }
+.combobox-option.selected { color: var(--seal); }
+.combobox-option-sub { font-family: var(--font-plex-mono); font-size: 10px; color: var(--parchment-dim); text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; }
+.combobox-empty { padding: 12px; font-size: 12px; color: var(--parchment-dim); }
+.map-search { flex: 1 1 220px; max-width: 320px; min-width: 180px; }
+.map-search-input { padding: 8px 12px; font-size: 12px; }
 
 /* ---------- Lists (profiles / shipments / software / exclusions) ---------- */
 .profiles { display: flex; flex-direction: column; border-top: 1px solid var(--hairline); }
@@ -529,8 +583,8 @@ body.map-fullscreen .m-fab-edit, body.map-fullscreen .m-fab-more { bottom: calc(
 
   .field-grid { grid-template-columns: 1fr; gap: 12px; }
   .drawer { width: 100vw; max-width: 100vw; }
-  .add-bank-form { flex-direction: column; align-items: stretch; }
-  .add-bank-form input, .add-bank-form select { width: 100% !important; }
+  .bank-popover { width: calc(100vw - 32px); max-width: 280px; }
+  .map-search { max-width: 100%; flex-basis: 100%; }
 
   .search-input { font-size: 16px; } /* Prevent zoom on iOS focus */
   .profile-row { grid-template-columns: 34px 1fr auto; gap: 8px; row-gap: 4px; }

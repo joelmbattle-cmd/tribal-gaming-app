@@ -10,12 +10,12 @@ import { MachineDrawerContent } from "@/components/machine-drawer-content";
 import { downloadImportTemplate, exportRowsToExcel, readWorkbookRows } from "@/lib/excel-client";
 import { getMachinesForExportAction, importMachinesAction } from "@/lib/actions/import-export";
 import { createMachineAction } from "@/lib/actions/machines";
+import { BankCombobox, NEW_BANK_VALUE } from "@/components/bank-combobox";
 import type { MachineListItem } from "@/lib/data/machines";
 import type { BankOption, FloorArea } from "@/lib/data/floor";
 
 const STATUS_LABEL: Record<string, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
 const STATUS_CHIP: Record<string, string> = { VERIFIED: "chip-cleared", FLAGGED: "chip-flagged", PENDING: "chip-investigation" };
-const NEW_BANK_VALUE = "__new__";
 
 export function MachineListView({
   machines,
@@ -226,20 +226,7 @@ export function MachineListView({
           <div className="field-grid">
             <div>
               <label className="field-label">Bank</label>
-              <select
-                className="field-input"
-                value={bankId}
-                onChange={(e) => setBankId(e.target.value)}
-                disabled={pending}
-              >
-                <option value="">— Unassigned —</option>
-                <option value={NEW_BANK_VALUE}>+ Create New Bank…</option>
-                {banks.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.occupied}/{b.capacity}) — {b.areaLabel}
-                  </option>
-                ))}
-              </select>
+              <BankCombobox banks={banks} value={bankId} onChange={setBankId} disabled={pending} />
             </div>
             {creatingBank && (
               <>
