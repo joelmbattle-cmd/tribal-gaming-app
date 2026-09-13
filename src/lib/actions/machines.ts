@@ -7,6 +7,7 @@ import { uploadDocument } from "@/lib/blob";
 import { addBankAction, logMapChange, nextBankPosition } from "@/lib/actions/floor";
 import { placeMachineInSeat } from "@/lib/actions/import-export";
 import { getAreas, getBankOptions } from "@/lib/data/floor";
+import { getShipmentsForMachine } from "@/lib/data/shipments";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
 
 export type BankTarget = { bankId?: string; newBank?: { name: string; areaKey: string; capacity: number } };
@@ -115,9 +116,10 @@ export async function getMachineDrawerDataAction(serial: string) {
     getAreas(),
   ]);
   if (!m) return null;
-  const priorBank = m.archived && m.priorBankId
-    ? await db.bank.findUnique({ where: { id: m.priorBankId } })
-    : null;
+  const [priorBank, shipments] = await Promise.all([
+    m.archived && m.priorBankId ? db.bank.findUnique({ where: { id: m.priorBankId } }) : Promise.resolve(null),
+    getShipmentsForMachine(m.id),
+  ]);
   return {
     serial: m.serial,
     bankId: m.bankId,
@@ -150,6 +152,15 @@ export async function getMachineDrawerDataAction(serial: string) {
       id: h.id,
       date: h.date.toISOString().slice(0, 10),
       event: h.event,
+    })),
+    shipments: shipments.map((s) => ({
+      id: s.id,
+      type: s.type,
+      vendor: s.vendor,
+      carrier: s.carrier,
+      shippingDate: s.shippingDate.toISOString().slice(0, 10),
+      estimatedArrivalDate: s.estimatedArrivalDate ? s.estimatedArrivalDate.toISOString().slice(0, 10) : null,
+      status: s.status,
     })),
   };
 }

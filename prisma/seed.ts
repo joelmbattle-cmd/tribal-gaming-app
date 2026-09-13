@@ -12,6 +12,7 @@ async function main() {
   await db.machineHistory.deleteMany();
   await db.machineDocument.deleteMany();
   await db.mapChangeLog.deleteMany();
+  await db.shipmentMachine.deleteMany();
   await db.machine.deleteMany();
   await db.bank.deleteMany();
   await db.area.deleteMany();
@@ -363,8 +364,11 @@ async function main() {
   await db.shipment.create({
     data: {
       id: "SH-2298",
+      type: "Inbound",
+      vendor: "Everi Games",
       carrier: "XPO Logistics",
-      received: new Date("2026-08-09"),
+      shippingDate: new Date("2026-08-06"),
+      estimatedArrivalDate: new Date("2026-08-09"),
       status: "Processing",
       documents: {
         create: [
@@ -387,13 +391,19 @@ async function main() {
           { email: "warehouse@agency.gov", sent: false },
         ],
       },
+      // Matches the two Everi Empire EXL machines' own history notes
+      // ("Received from shipment SH-2298") seeded above.
+      machines: { create: [{ machineId: "EGD-11801" }, { machineId: "EGD-11802" }] },
     },
   });
   await db.shipment.create({
     data: {
       id: "SH-2301",
+      type: "Inbound",
+      vendor: "IGT Corporation",
       carrier: "Old Dominion Freight",
-      received: new Date("2026-08-16"),
+      shippingDate: new Date("2026-08-13"),
+      estimatedArrivalDate: new Date("2026-08-16"),
       status: "Open",
       documents: { create: [{ name: "Bill of Lading.pdf", date: new Date("2026-08-16") }] },
       extracted: {
@@ -410,13 +420,17 @@ async function main() {
           { email: "floor-ops@agency.gov", sent: false },
         ],
       },
+      machines: { create: [{ machineId: "EGD-10412" }, { machineId: "EGD-10413" }] },
     },
   });
   await db.shipment.create({
     data: {
       id: "SH-2276",
+      type: "Inbound",
+      vendor: "Aristocrat Technologies",
       carrier: "XPO Logistics",
-      received: new Date("2026-07-02"),
+      shippingDate: new Date("2026-06-29"),
+      estimatedArrivalDate: new Date("2026-07-02"),
       status: "Closed",
       documents: {
         create: [
@@ -434,6 +448,30 @@ async function main() {
         ],
       },
       notify: { create: [{ email: "compliance-lead@agency.gov", sent: true }] },
+      machines: { create: [{ machineId: "EGD-10414" }, { machineId: "EGD-10415" }] },
+    },
+  });
+  await db.shipment.create({
+    data: {
+      id: "SH-2310",
+      type: "Outbound",
+      vendor: "IGT Corporation",
+      carrier: "UPS Freight",
+      shippingDate: new Date("2026-08-20"),
+      estimatedArrivalDate: new Date("2026-08-24"),
+      status: "Open",
+      documents: { create: [{ name: "Return Authorization.pdf", date: new Date("2026-08-20") }] },
+      extracted: {
+        create: [
+          { key: "RMA Number", value: "RMA-4471" },
+          { key: "Machine Count", value: "1" },
+          { key: "Reason", value: "Compliance seal discrepancy — return for inspection" },
+        ],
+      },
+      notify: { create: [{ email: "compliance-lead@agency.gov", sent: false }] },
+      // The flagged/conditionally-revoked machine seeded above, returned to
+      // the manufacturer for remediation.
+      machines: { create: [{ machineId: "EGD-10414" }] },
     },
   });
 

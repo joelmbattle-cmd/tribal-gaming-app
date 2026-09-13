@@ -25,6 +25,19 @@ export async function getMachineList(showArchived = false) {
   }));
 }
 
+// Lightweight list for the Shipments "Related Machines" picker — every
+// machine regardless of archived state, since an outbound shipment can carry
+// a machine already pulled from the floor (e.g. returned to the vendor).
+export async function getMachineOptions() {
+  const machines = await db.machine.findMany({
+    orderBy: { serial: "asc" },
+    select: { id: true, serial: true, manufacturer: true, model: true, archived: true },
+  });
+  return machines;
+}
+
+export type MachineOption = Awaited<ReturnType<typeof getMachineOptions>>[number];
+
 export async function getMachine(serial: string) {
   return db.machine.findUnique({
     where: { serial },
