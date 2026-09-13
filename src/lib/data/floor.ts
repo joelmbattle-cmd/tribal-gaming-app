@@ -44,6 +44,22 @@ export async function getMapChangeLog(limit = 8) {
   return db.mapChangeLog.findMany({ orderBy: { ts: "desc" }, take: limit });
 }
 
+export async function getBankOptions() {
+  const banks = await db.bank.findMany({
+    include: { machines: true, area: true },
+    orderBy: { name: "asc" },
+  });
+  return banks.map((b) => ({
+    id: b.id,
+    name: b.name,
+    areaLabel: b.area.label,
+    capacity: b.capacity,
+    occupied: b.machines.filter((m) => m.seatIndex !== null).length,
+  }));
+}
+
+export type BankOption = Awaited<ReturnType<typeof getBankOptions>>[number];
+
 export type FloorMapData = Awaited<ReturnType<typeof getFloorMapData>>;
 export type FloorArea = FloorMapData["areas"][number];
 export type FloorBank = FloorMapData["banks"][number];
