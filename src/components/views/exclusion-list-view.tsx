@@ -36,6 +36,10 @@ export type ExclusionViewItem = {
 const STATUS_OPTIONS = ["Active", "Expired", "Removed", "Under Review"];
 const EXCLUSION_TYPE_OPTIONS = ["Self-Exclusion", "Involuntary Exclusion", "Other"];
 
+function initials(name?: string | null): string {
+  return name ? name.split(" ").map((w) => w[0]).join("") : "";
+}
+
 export function ExclusionListView({ exclusions, showArchived }: { exclusions: ExclusionViewItem[]; showArchived: boolean }) {
   const variant = useShellVariant();
   const pathname = usePathname();
@@ -238,7 +242,18 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
         )}
         {exclusions.map((c) => (
           <button key={c.id} className="profile-row" onClick={() => openRecord(c.id)}>
-            <div className="avatar-locked">🔒</div>
+            <div className="avatar-photo-wrap">
+              {c.photoUrl ? (
+                // Plain <img>: the source is either a blob URL or an inline
+                // data URL, and next/image handles neither without extra
+                // remote-pattern configuration.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="avatar-photo" src={c.photoUrl} alt="" />
+              ) : (
+                <div className="avatar">{initials(c.personName) || c.id.slice(0, 2)}</div>
+              )}
+              <div className="avatar-lock-badge">🔒</div>
+            </div>
             <div><div className="p-name">{c.personName || c.id}</div><div className="p-id">{c.id} · {c.term}</div></div>
             <div className="p-id">
               {showArchived ? `Archived ${c.archivedAt ?? ""} by ${c.archivedBy || "—"}` : `Enrolled ${c.enrolled}`}
