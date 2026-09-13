@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
@@ -13,11 +13,14 @@ import {
   deleteShipmentDocumentAction,
   linkShipmentMachineAction,
   unlinkShipmentMachineAction,
+  acceptShipmentFieldsAction,
+  discardProposedFieldAction,
 } from "@/lib/actions/shipments";
 import { useShellVariant } from "@/components/shell-variant";
 import { useRef } from "react";
 import { MachineMultiPicker } from "@/components/machine-multi-picker";
 import type { MachineOption } from "@/lib/data/machines";
+import { buildEmailPreview, buildPermitPreview } from "@/lib/shipment-templates";
 
 export type ShipmentMachineItem = {
   id: string;
@@ -36,15 +39,34 @@ export type ShipmentViewItem = {
   estimatedArrivalDate: string | null;
   status: string;
   documents: { id: string; name: string; date: string }[];
-  extracted: { id: string; key: string; value: string }[];
+  extracted: { id: string; key: string; value: string; status: string; confident: boolean }[];
   notify: { id: string; email: string; sent: boolean }[];
   machines: ShipmentMachineItem[];
 };
 
-const STATUS_CHIP: Record<string, string> = { Closed: "chip-cleared", Processing: "chip-investigation", Open: "chip-neutral" };
+const STATUS_CHIP: Record<string, string> = {
+  Closed: "chip-cleared",
+  Processing: "chip-investigation",
+  Open: "chip-neutral",
+  "Ready for Notification": "chip-cleared",
+};
 const TYPE_OPTIONS = ["Inbound", "Outbound"] as const;
 type ShipmentType = (typeof TYPE_OPTIONS)[number];
 const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const previewBoxStyle: CSSProperties = {
+  whiteSpace: "pre-wrap",
+  fontFamily: "var(--font-plex-mono), monospace",
+  fontSize: 11.5,
+  lineHeight: 1.5,
+  background: "var(--panel-lighter)",
+  border: "1px solid var(--hairline)",
+  borderRadius: 6,
+  padding: "12px 14px",
+  marginBottom: 18,
+  maxHeight: 260,
+  overflow: "auto",
+};
 
 export function ShipmentListView({ shipments, machines }: { shipments: ShipmentViewItem[]; machines: MachineOption[] }) {
   const variant = useShellVariant();
@@ -72,10 +94,17 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
   const [editEstimatedArrivalDate, setEditEstimatedArrivalDate] = useState("");
   const [editEmails, setEditEmails] = useState("");
 
+  // Draft values for proposed (not-yet-accepted) extracted fields, keyed by
+  // field id — lets a reviewer edit a value before it's written back into the
+  // shipment record.
+  const [proposedDrafts, setProposedDrafts] = useState<Record<string, string>>({});
+
   const shipment = shipments.find((s) => s.id === selected);
   const isClosed = shipment?.status === "Closed";
   const linkedIds = new Set(shipment?.machines.map((m) => m.id) ?? []);
   const linkableMachines = machines.filter((m) => !linkedIds.has(m.id));
+  const proposedFields = shipment?.extracted.filter((f) => f.status === "proposed") ?? [];
+  const acceptedFields = shipment?.extracted.filter((f) => f.status !== "proposed") ?? [];
 
   const send = (id: string) => {
     startTransition(async () => {
@@ -192,13 +221,17 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
 
     startTransition(async () => {
       try {
-        const { storage } = await addShipmentDocumentAction(selected, formData);
-        showToast(
+        const { storage, proposedCount } = await addShipmentDocumentAction(selected, formData);
+        const attachedMsg =
           storage === "uploaded"
             ? `Document "${file.name}" attached`
             : storage === "skipped"
               ? `"${file.name}" recorded — file storage is not configured`
-              : `Upload failed — "${file.name}" recorded without the file`,
+              : `Upload failed — "${file.name}" recorded without the file`;
+        showToast(
+          proposedCount > 0
+            ? `${attachedMsg} — ${proposedCount} field${proposedCount === 1 ? "" : "s"} proposed for review`
+            : attachedMsg,
         );
         router.refresh();
       } catch {
@@ -242,7 +275,52 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
 
   const closeDrawer = () => {
     setEditing(false);
+    setProposedDrafts({});
     setSelected(null);
+  };
+
+  const acceptField = (fieldId: string, fallbackValue: string) => {
+    startTransition(async () => {
+      try {
+        await acceptShipmentFieldsAction(selected!, [{ id: fieldId, value: proposedDrafts[fieldId] ?? fallbackValue }]);
+        showToast("Field accepted");
+        router.refresh();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Failed to accept field");
+      }
+    });
+  };
+
+  const acceptAllFields = () => {
+    if (!shipment || proposedFields.length === 0) return;
+    startTransition(async () => {
+      try {
+        await acceptShipmentFieldsAction(
+          shipment.id,
+          proposedFields.map((f) => ({ id: f.id, value: proposedDrafts[f.id] ?? f.value })),
+        );
+        showToast("Proposed fields accepted");
+        router.refresh();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Failed to accept fields");
+      }
+    });
+  };
+
+  const discardField = (fieldId: string) => {
+    startTransition(async () => {
+      await discardProposedFieldAction(fieldId);
+      showToast("Proposed field discarded");
+      router.refresh();
+    });
+  };
+
+  const markReadyForNotification = (id: string) => {
+    startTransition(async () => {
+      await updateShipmentStatusAction(id, "Ready for Notification");
+      showToast("Shipment marked Ready for Notification");
+      router.refresh();
+    });
   };
 
   return (
@@ -380,9 +458,54 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                 </div>
               )}
 
-              <div className="section-label">AI-Extracted Fields</div>
+              <div className="section-label">Proposed Extracted Fields ({proposedFields.length})</div>
+              {proposedFields.length === 0 ? (
+                <div className="p-id" style={{ marginBottom: 12 }}>No pending proposals — upload a document to run extraction.</div>
+              ) : (
+                <>
+                  <div className="p-id" style={{ marginBottom: 10 }}>
+                    Review and edit before accepting. Accepting a confident field also updates the matching shipment field or links the machine by serial.
+                  </div>
+                  {proposedFields.map((f) => (
+                    <div key={f.id} className="doc-row" style={{ alignItems: "center" }}>
+                      <span className="doc-name" style={{ flex: "0 0 auto", minWidth: 170 }}>
+                        {f.key}
+                        {!f.confident && (
+                          <span className="chip chip-investigation" style={{ marginLeft: 8, fontSize: 10 }}>unmatched</span>
+                        )}
+                      </span>
+                      <input
+                        type="text"
+                        className="field-input"
+                        value={proposedDrafts[f.id] ?? f.value}
+                        onChange={(e) => setProposedDrafts((d) => ({ ...d, [f.id]: e.target.value }))}
+                        disabled={pending || isClosed}
+                        style={{ flex: 1 }}
+                      />
+                      {!isClosed && (
+                        <>
+                          <button className="btn btn-small" disabled={pending} onClick={() => acceptField(f.id, f.value)}>
+                            Accept
+                          </button>
+                          <button className="doc-delete-btn" disabled={pending} onClick={() => discardField(f.id)} title="Discard">
+                            ✕
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {!isClosed && (
+                    <button className="btn btn-primary" disabled={pending} onClick={acceptAllFields} style={{ marginTop: 10 }}>
+                      Accept All Proposed Fields
+                    </button>
+                  )}
+                </>
+              )}
+
+              <div className="section-label">Accepted Extracted Fields</div>
               <div className="field-grid">
-                {shipment.extracted.map((f) => (
+                {acceptedFields.length === 0 && <div className="p-id">None accepted yet.</div>}
+                {acceptedFields.map((f) => (
                   <div key={f.id}><div className="field-label">{f.key}</div><div className="field-value">{f.value}</div></div>
                 ))}
               </div>
@@ -433,6 +556,16 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
               <button className="btn" disabled={pending} onClick={() => fileInput.current?.click()} style={{ marginTop: 12 }}>
                 + Attach Document
               </button>
+
+              <div className="section-label">Notification Email Preview</div>
+              <div className="p-id" style={{ marginBottom: 8 }}>
+                Filled from a fixed template using accepted fields — regenerates automatically as fields change.
+              </div>
+              <pre style={previewBoxStyle}>{buildEmailPreview(shipment).body}</pre>
+
+              <div className="section-label">Shipping Permit Preview</div>
+              <pre style={previewBoxStyle}>{buildPermitPreview(shipment)}</pre>
+
               <div className="section-label">Notification List</div>
               {shipment.notify.map((n) => (
                 <div className="notify-row" key={n.id}>
@@ -444,6 +577,11 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                 <button className="btn btn-primary" disabled={pending} onClick={() => send(shipment.id)}>
                   Send Prepared Notifications
                 </button>
+                {!isClosed && shipment.status !== "Ready for Notification" && proposedFields.length === 0 && (
+                  <button className="btn" disabled={pending} onClick={() => markReadyForNotification(shipment.id)}>
+                    Mark Ready for Notification
+                  </button>
+                )}
                 {!isClosed && (
                   <button className="btn" disabled={pending} onClick={() => complete(shipment.id)}>
                     Mark as Closed

@@ -200,12 +200,26 @@ model ShipmentDocument {
 }
 
 // Simulated AI document scrubbing output — structured key/value pairs.
+//
+// `status` gates the human-review step (V1 §2): a fresh extract pass lands as
+// "proposed" and stays editable until a person accepts it. Pre-existing rows
+// (seed data, anything from before this field existed) default to "accepted"
+// so they keep rendering as already-reviewed extracted fields.
+//
+// `matchKey` tags which shipment field (or "serial" for a related machine) an
+// accepted value should be written back into, and `confident` gates whether
+// accept does that write automatically vs. just recording the value for the
+// record. Both are null/true for rows with no auto-apply target (e.g. a
+// tracking number — informational only, nothing on Shipment to update).
 model ShipmentField {
   id         String   @id @default(cuid())
   shipmentId String
   shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   key        String
   value      String
+  status     String   @default("accepted") // proposed | accepted
+  matchKey   String? // vendor | carrier | shippingDate | estimatedArrivalDate | serial
+  confident  Boolean  @default(true)
 }
 
 model ShipmentRecipient {
