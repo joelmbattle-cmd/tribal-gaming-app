@@ -18,6 +18,7 @@ import {
   moveMachineSlotAction,
   renameAreaAction,
   setBankAreaAction,
+  shrinkZoneHeightAction,
 } from "@/lib/actions/floor";
 import type { FloorArea, FloorBank, FloorSeat } from "@/lib/data/floor";
 
@@ -371,6 +372,11 @@ export function FloorMapView({
     try { await growZoneHeightAction(areaKey); showToast(`${area?.label ?? "Area"} expanded`); router.refresh(); }
     catch { showToast("Could not expand area"); }
   };
+  const shrinkZone = async (areaKey: string) => {
+    const area = areaList.find((a) => a.key === areaKey);
+    try { await shrinkZoneHeightAction(areaKey); showToast(`${area?.label ?? "Area"} shrunk`); router.refresh(); }
+    catch (err) { showToast(err instanceof Error ? err.message : "Could not shrink area"); }
+  };
 
   const renameArea = async (areaKey: string, label: string) => {
     const trimmed = label.trim();
@@ -499,6 +505,7 @@ export function FloorMapView({
                     a.label
                   )}
                   <button className="zone-expand-btn" onClick={() => growZone(a.key)} title="Expand this area">+ Expand Area</button>
+                  <button className="zone-expand-btn" onClick={() => shrinkZone(a.key)} title="Shrink this area">− Shrink Area</button>
                 </div>
               </div>
             ))}

@@ -11,11 +11,21 @@ import { downloadImportTemplate, exportRowsToExcel, readWorkbookRows } from "@/l
 import { getMachinesForExportAction, importMachinesAction } from "@/lib/actions/import-export";
 import { createMachineAction } from "@/lib/actions/machines";
 import type { MachineListItem } from "@/lib/data/machines";
+import type { BankOption, FloorArea } from "@/lib/data/floor";
 
 const STATUS_LABEL: Record<string, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
 const STATUS_CHIP: Record<string, string> = { VERIFIED: "chip-cleared", FLAGGED: "chip-flagged", PENDING: "chip-investigation" };
+const NEW_BANK_VALUE = "__new__";
 
-export function MachineListView({ machines }: { machines: MachineListItem[] }) {
+export function MachineListView({
+  machines,
+  banks,
+  areas,
+}: {
+  machines: MachineListItem[];
+  banks: BankOption[];
+  areas: FloorArea[];
+}) {
   const variant = useShellVariant();
   const [selected, setSelected] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -28,6 +38,10 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
   const [theme, setTheme] = useState("");
   const [parSheet, setParSheet] = useState("");
   const [sealNumber, setSealNumber] = useState("");
+  const [bankId, setBankId] = useState("");
+  const [newBankName, setNewBankName] = useState("");
+  const [newBankCapacity, setNewBankCapacity] = useState("4");
+  const [newBankAreaKey, setNewBankAreaKey] = useState(areas[0]?.key ?? "");
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const showToast = useToast();
@@ -61,11 +75,21 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
     setTheme("");
     setParSheet("");
     setSealNumber("");
+    setBankId("");
+    setNewBankName("");
+    setNewBankCapacity("4");
+    setNewBankAreaKey(areas[0]?.key ?? "");
   };
+
+  const creatingBank = bankId === NEW_BANK_VALUE;
 
   const createMachine = () => {
     if (!serial.trim() || !assetNumber.trim() || !manufacturer.trim() || !model.trim() || !theme.trim() || !parSheet.trim()) {
       showToast("Serial, asset number, manufacturer, model, game theme, and PAR sheet are required");
+      return;
+    }
+    if (creatingBank && !newBankName.trim()) {
+      showToast("Enter a name for the new bank");
       return;
     }
     startTransition(async () => {
@@ -78,6 +102,10 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
           theme: theme.trim(),
           parSheet: parSheet.trim(),
           sealNumber: sealNumber.trim(),
+          bankId: !creatingBank && bankId ? bankId : undefined,
+          newBank: creatingBank
+            ? { name: newBankName.trim(), areaKey: newBankAreaKey, capacity: parseInt(newBankCapacity, 10) || 4 }
+            : undefined,
         });
         resetCreateForm();
         setShowCreateForm(false);
@@ -188,10 +216,71 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
         </div>
         <div className="drawer-body">
           <div className="field-label" style={{ marginBottom: 4 }}>
-            Placed on the Interactive Floor Map in the Unassigned bank — move it to a real bank there once seated.
+            {creatingBank
+              ? "Will create the bank below, then seat the machine in it."
+              : bankId
+              ? "Will be seated in the selected bank on the Interactive Floor Map."
+              : "Leave Bank blank to place it in the Unassigned bank — move it to a real bank there once seated."}
           </div>
           <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Machine Master Fields</div>
           <div className="field-grid">
+            <div>
+              <label className="field-label">Bank</label>
+              <select
+                className="field-input"
+                value={bankId}
+                onChange={(e) => setBankId(e.target.value)}
+                disabled={pending}
+              >
+                <option value="">— Unassigned —</option>
+                <option value={NEW_BANK_VALUE}>+ Create New Bank…</option>
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.occupied}/{b.capacity}) — {b.areaLabel}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {creatingBank && (
+              <>
+                <div>
+                  <label className="field-label">New Bank Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Bank 122 — West Wing"
+                    value={newBankName}
+                    onChange={(e) => setNewBankName(e.target.value)}
+                    className="field-input"
+                    disabled={pending}
+                  />
+                </div>
+                <div>
+                  <label className="field-label">Capacity</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={newBankCapacity}
+                    onChange={(e) => setNewBankCapacity(e.target.value)}
+                    className="field-input"
+                    disabled={pending}
+                  />
+                </div>
+                <div>
+                  <label className="field-label">Area</label>
+                  <select
+                    className="field-input"
+                    value={newBankAreaKey}
+                    onChange={(e) => setNewBankAreaKey(e.target.value)}
+                    disabled={pending}
+                  >
+                    {areas.map((a) => (
+                      <option key={a.key} value={a.key}>{a.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
             <div>
               <label className="field-label">Serial Number</label>
               <input
