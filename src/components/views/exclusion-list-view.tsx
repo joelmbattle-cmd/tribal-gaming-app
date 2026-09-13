@@ -6,7 +6,7 @@ import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
 import { preparePhoto } from "@/lib/image-client";
-import { createExclusionAction, uploadExclusionPhotoAction, addExclusionDocumentAction, deleteExclusionDocumentAction, archiveExclusionAction, unarchiveExclusionAction } from "@/lib/actions/exclusions";
+import { createExclusionAction, updateExclusionAction, uploadExclusionPhotoAction, addExclusionDocumentAction, deleteExclusionDocumentAction, archiveExclusionAction, unarchiveExclusionAction } from "@/lib/actions/exclusions";
 
 export type ExclusionViewItem = {
   id: string;
@@ -36,6 +36,10 @@ export type ExclusionViewItem = {
 const STATUS_OPTIONS = ["Active", "Expired", "Removed", "Under Review"];
 const EXCLUSION_TYPE_OPTIONS = ["Self-Exclusion", "Involuntary Exclusion", "Other"];
 
+function initials(name?: string | null): string {
+  return name ? name.split(" ").map((w) => w[0]).join("") : "";
+}
+
 export function ExclusionListView({ exclusions, showArchived }: { exclusions: ExclusionViewItem[]; showArchived: boolean }) {
   const variant = useShellVariant();
   const pathname = usePathname();
@@ -45,6 +49,19 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
   // Holds the id being confirmed. Cleared whenever the drawer opens or closes
   // so a record can never appear pre-armed when it is reopened.
   const [confirmingArchive, setConfirmingArchive] = useState<string | null>(null);
+  // Holds the id being edited. Cleared whenever the drawer opens or closes,
+  // same reasoning as confirmingArchive above.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPersonName, setEditPersonName] = useState("");
+  const [editAliases, setEditAliases] = useState("");
+  const [editDateOfBirth, setEditDateOfBirth] = useState("");
+  const [editGovernmentId, setEditGovernmentId] = useState("");
+  const [editExclusionType, setEditExclusionType] = useState(EXCLUSION_TYPE_OPTIONS[0]);
+  const [editStatus, setEditStatus] = useState(STATUS_OPTIONS[0]);
+  const [editTerm, setEditTerm] = useState("");
+  const [editExpirationDate, setEditExpirationDate] = useState("");
+  const [editRestrictions, setEditRestrictions] = useState("");
+  const [editSourceInitiated, setEditSourceInitiated] = useState("");
   const [personName, setPersonName] = useState("");
   const [aliases, setAliases] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -167,12 +184,58 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
 
   const openRecord = (id: string) => {
     setConfirmingArchive(null);
+    setEditingId(null);
     setSelected(id);
   };
 
   const closeRecord = () => {
     setConfirmingArchive(null);
+    setEditingId(null);
     setSelected(null);
+  };
+
+  const startEdit = (c: ExclusionViewItem) => {
+    setEditPersonName(c.personName ?? "");
+    setEditAliases(c.aliases ?? "");
+    setEditDateOfBirth(c.dateOfBirth ?? "");
+    setEditGovernmentId(c.governmentId ?? "");
+    setEditExclusionType(c.exclusionType ?? EXCLUSION_TYPE_OPTIONS[0]);
+    setEditStatus(c.status);
+    setEditTerm(c.term);
+    setEditExpirationDate(c.expirationDate ?? "");
+    setEditRestrictions(c.restrictions ?? "");
+    setEditSourceInitiated(c.sourceInitiated ?? "");
+    setEditingId(c.id);
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
+  const saveEdit = () => {
+    if (!editPersonName.trim() || !editTerm.trim()) {
+      showToast("Full legal name and term are required");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await updateExclusionAction(editingId!, {
+          personName: editPersonName.trim(),
+          aliases: editAliases.trim(),
+          dateOfBirth: editDateOfBirth,
+          governmentId: editGovernmentId.trim(),
+          exclusionType: editExclusionType,
+          status: editStatus,
+          term: editTerm.trim(),
+          expirationDate: editExpirationDate,
+          restrictions: editRestrictions.trim(),
+          sourceInitiated: editSourceInitiated.trim(),
+        });
+        setEditingId(null);
+        showToast("Exclusion updated");
+        router.refresh();
+      } catch {
+        showToast("Failed to update exclusion");
+      }
+    });
   };
 
   const archive = () => {
@@ -238,7 +301,18 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
         )}
         {exclusions.map((c) => (
           <button key={c.id} className="profile-row" onClick={() => openRecord(c.id)}>
-            <div className="avatar-locked">🔒</div>
+            <div className="avatar-photo-wrap">
+              {c.photoUrl ? (
+                // Plain <img>: the source is either a blob URL or an inline
+                // data URL, and next/image handles neither without extra
+                // remote-pattern configuration.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="avatar-photo" src={c.photoUrl} alt="" />
+              ) : (
+                <div className="avatar">{initials(c.personName) || c.id.slice(0, 2)}</div>
+              )}
+              <div className="avatar-lock-badge">🔒</div>
+            </div>
             <div><div className="p-name">{c.personName || c.id}</div><div className="p-id">{c.id} · {c.term}</div></div>
             <div className="p-id">
               {showArchived ? `Archived ${c.archivedAt ?? ""} by ${c.archivedBy || "—"}` : `Enrolled ${c.enrolled}`}
@@ -250,7 +324,13 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
       </div>
 
       <ResponsiveOverlay open={!!selected} onClose={closeRecord}>
-        {exclusion && (
+        {exclusion && (() => {
+          // Re-derived from the current record (not just editingId) so a
+          // record archived out from under an open edit — by this operator in
+          // another tab, or a concurrent one — immediately drops back to
+          // view-only instead of leaving stale inputs on screen.
+          const isEditing = editingId === exclusion.id && !exclusion.archived;
+          return (
           <>
             <div className="drawer-head">
               <div>
@@ -288,24 +368,107 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
                 {exclusion.photoUrl ? "Update Photo" : "+ Add Photo"}
               </button>
 
+              {!exclusion.archived && (
+                <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                  {isEditing ? (
+                    <>
+                      <button className="btn btn-primary" disabled={pending} onClick={saveEdit}>
+                        Save Changes
+                      </button>
+                      <button className="btn" disabled={pending} onClick={cancelEdit}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn" disabled={pending} onClick={() => startEdit(exclusion)}>
+                      Edit Details
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="section-label" style={{ marginTop: 16 }}>Person Identification</div>
-              <div className="field-grid">
-                <div><div className="field-label">Full Legal Name</div><div className="field-value">{exclusion.personName || "—"}</div></div>
-                <div><div className="field-label">Known Aliases</div><div className="field-value">{exclusion.aliases || "—"}</div></div>
-                <div><div className="field-label">Date of Birth</div><div className="field-value">{exclusion.dateOfBirth || "—"}</div></div>
-                <div><div className="field-label">Government / Tribal ID</div><div className="field-value">{exclusion.governmentId || "—"}</div></div>
-              </div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">Full Legal Name</label>
+                    <input type="text" className="field-input" value={editPersonName} onChange={(e) => setEditPersonName(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Known Aliases</label>
+                    <input type="text" className="field-input" value={editAliases} onChange={(e) => setEditAliases(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Date of Birth</label>
+                    <input type="date" className="field-input" value={editDateOfBirth} onChange={(e) => setEditDateOfBirth(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Government / Tribal ID</label>
+                    <input type="text" className="field-input" value={editGovernmentId} onChange={(e) => setEditGovernmentId(e.target.value)} disabled={pending} />
+                  </div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Full Legal Name</div><div className="field-value">{exclusion.personName || "—"}</div></div>
+                  <div><div className="field-label">Known Aliases</div><div className="field-value">{exclusion.aliases || "—"}</div></div>
+                  <div><div className="field-label">Date of Birth</div><div className="field-value">{exclusion.dateOfBirth || "—"}</div></div>
+                  <div><div className="field-label">Government / Tribal ID</div><div className="field-value">{exclusion.governmentId || "—"}</div></div>
+                </div>
+              )}
 
               <div className="section-label">Exclusion Details</div>
-              <div className="field-grid">
-                <div><div className="field-label">Type</div><div className="field-value">{exclusion.exclusionType || "—"}</div></div>
-                <div><div className="field-label">Status</div><div className="field-value">{exclusion.status}</div></div>
-                <div><div className="field-label">Term</div><div className="field-value">{exclusion.term}</div></div>
-                <div><div className="field-label">Expiration Date</div><div className="field-value">{exclusion.expirationDate || "—"}</div></div>
-                <div><div className="field-label">Source / How Initiated</div><div className="field-value">{exclusion.sourceInitiated || "—"}</div></div>
-              </div>
-              <div className="field-label" style={{ marginTop: 12 }}>Restrictions / Terms</div>
-              <div className="field-value">{exclusion.restrictions || "—"}</div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">Type</label>
+                    <select className="field-input" value={editExclusionType} onChange={(e) => setEditExclusionType(e.target.value)} disabled={pending}>
+                      {EXCLUSION_TYPE_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Status</label>
+                    <select className="field-input" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} disabled={pending}>
+                      {STATUS_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Term</label>
+                    <input type="text" className="field-input" value={editTerm} onChange={(e) => setEditTerm(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Expiration Date</label>
+                    <input type="date" className="field-input" value={editExpirationDate} onChange={(e) => setEditExpirationDate(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Source / How Initiated</label>
+                    <input type="text" className="field-input" value={editSourceInitiated} onChange={(e) => setEditSourceInitiated(e.target.value)} disabled={pending} />
+                  </div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Type</div><div className="field-value">{exclusion.exclusionType || "—"}</div></div>
+                  <div><div className="field-label">Status</div><div className="field-value">{exclusion.status}</div></div>
+                  <div><div className="field-label">Term</div><div className="field-value">{exclusion.term}</div></div>
+                  <div><div className="field-label">Expiration Date</div><div className="field-value">{exclusion.expirationDate || "—"}</div></div>
+                  <div><div className="field-label">Source / How Initiated</div><div className="field-value">{exclusion.sourceInitiated || "—"}</div></div>
+                </div>
+              )}
+
+              {isEditing ? (
+                <div style={{ marginTop: 12 }}>
+                  <label className="field-label">Restrictions / Terms</label>
+                  <textarea className="field-input" rows={3} value={editRestrictions} onChange={(e) => setEditRestrictions(e.target.value)} disabled={pending} />
+                </div>
+              ) : (
+                <>
+                  <div className="field-label" style={{ marginTop: 12 }}>Restrictions / Terms</div>
+                  <div className="field-value">{exclusion.restrictions || "—"}</div>
+                </>
+              )}
 
               <div className="section-label">Documents ({exclusion.documents.length})</div>
               {exclusion.documents.map((d) => (
@@ -365,7 +528,8 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
               </div>
             </div>
           </>
-        )}
+          );
+        })()}
       </ResponsiveOverlay>
 
       <ResponsiveOverlay open={showCreateForm} onClose={() => setShowCreateForm(false)}>

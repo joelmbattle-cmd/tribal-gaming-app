@@ -42,6 +42,48 @@ export async function createExclusionAction(intake: ExclusionIntake) {
   return exclusion;
 }
 
+export type ExclusionUpdate = {
+  personName: string;
+  aliases?: string;
+  dateOfBirth?: string; // yyyy-mm-dd from a date input
+  governmentId?: string;
+  exclusionType: string;
+  status: string;
+  term: string;
+  expirationDate?: string;
+  restrictions?: string;
+  sourceInitiated?: string;
+};
+
+export async function updateExclusionAction(exclusionId: string, intake: ExclusionUpdate) {
+  const user = await requireRole("COMPLIANCE");
+
+  // Archived cases are view-only. Checked server-side (not just hidden in the
+  // UI) so a stale drawer or a crafted request can't edit a closed case.
+  const existing = await db.exclusion.findUnique({ where: { id: exclusionId }, select: { archived: true } });
+  if (!existing) throw new Error("Exclusion not found");
+  if (existing.archived) throw new Error("Cannot edit an archived exclusion");
+
+  const exclusion = await db.exclusion.update({
+    where: { id: exclusionId },
+    data: {
+      personName: intake.personName,
+      aliases: intake.aliases || null,
+      dateOfBirth: intake.dateOfBirth ? new Date(intake.dateOfBirth) : null,
+      governmentId: intake.governmentId || null,
+      exclusionType: intake.exclusionType,
+      status: intake.status,
+      term: intake.term,
+      expirationDate: intake.expirationDate ? new Date(intake.expirationDate) : null,
+      restrictions: intake.restrictions || null,
+      sourceInitiated: intake.sourceInitiated || null,
+      lastModifiedBy: user.name,
+    },
+  });
+  revalidatePath("/compliance/exclusions");
+  return exclusion;
+}
+
 export async function uploadExclusionPhotoAction(exclusionId: string, formData: FormData) {
   const user = await requireRole("COMPLIANCE");
   const file = formData.get("file") as File | null;
