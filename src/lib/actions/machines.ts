@@ -6,7 +6,10 @@ import { revalidatePath } from "next/cache";
 import { uploadDocument } from "@/lib/blob";
 import { addBankAction, logMapChange, nextBankPosition } from "@/lib/actions/floor";
 import { placeMachineInSeat } from "@/lib/actions/import-export";
+import { getAreas, getBankOptions } from "@/lib/data/floor";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
+
+export type BankTarget = { bankId?: string; newBank?: { name: string; areaKey: string; capacity: number } };
 
 const STATUS_LABEL: Record<ComplianceStatus, string> = {
   VERIFIED: "Verified",
@@ -22,9 +25,7 @@ export type NewMachineFields = {
   theme: string;
   parSheet: string;
   sealNumber?: string;
-  bankId?: string;
-  newBank?: { name: string; areaKey: string; capacity: number };
-};
+} & BankTarget;
 
 // New machines land on a shared "Unassigned" bank so they're visible on the
 // Interactive Floor Map immediately — operators move them to a real bank
@@ -44,14 +45,14 @@ async function findOrCreateUnassignedBank() {
   return { ...bank, area };
 }
 
-async function resolveTargetBank(fields: NewMachineFields) {
-  if (fields.newBank) {
-    const name = fields.newBank.name.trim();
+async function resolveTargetBank(target: BankTarget) {
+  if (target.newBank) {
+    const name = target.newBank.name.trim();
     if (!name) throw new Error("New bank name is required");
-    return addBankAction(name, fields.newBank.areaKey, fields.newBank.capacity);
+    return addBankAction(name, target.newBank.areaKey, target.newBank.capacity);
   }
-  if (!fields.bankId) return findOrCreateUnassignedBank();
-  const bank = await db.bank.findUnique({ where: { id: fields.bankId }, include: { area: true } });
+  if (!target.bankId) return findOrCreateUnassignedBank();
+  const bank = await db.bank.findUnique({ where: { id: target.bankId }, include: { area: true } });
   if (!bank) throw new Error("Selected bank not found");
   return bank;
 }
@@ -101,18 +102,25 @@ export async function createMachineAction(fields: NewMachineFields) {
 
 export async function getMachineDrawerDataAction(serial: string) {
   await requireRole("COMPLIANCE");
-  const m = await db.machine.findUnique({
-    where: { serial },
-    include: {
-      bank: true,
-      documents: { orderBy: { date: "asc" } },
-      history: { orderBy: { date: "desc" } },
-    },
-  });
+  const [m, banks, areas] = await Promise.all([
+    db.machine.findUnique({
+      where: { serial },
+      include: {
+        bank: true,
+        documents: { orderBy: { date: "asc" } },
+        history: { orderBy: { date: "desc" } },
+      },
+    }),
+    getBankOptions(),
+    getAreas(),
+  ]);
   if (!m) return null;
   return {
     serial: m.serial,
+    bankId: m.bankId,
     bankName: m.bank?.name ?? "Unassigned",
+    banks,
+    areas,
     manufacturer: m.manufacturer,
     model: m.model,
     theme: m.theme,
@@ -202,6 +210,30 @@ export async function updateMachineFieldsAction(
 
   revalidatePath("/compliance/floor");
   revalidatePath("/compliance/machines");
+}
+
+export async function updateMachineBankAction(serial: string, target: BankTarget) {
+  await requireRole("COMPLIANCE");
+  const machine = await db.machine.findUnique({ where: { serial } });
+  if (!machine) throw new Error("Machine not found");
+
+  const bank = await resolveTargetBank(target);
+  if (bank.id === machine.bankId) return;
+
+  const seatIndex = await placeMachineInSeat(bank.id, undefined);
+
+  await db.$transaction([
+    db.machine.update({ where: { serial }, data: { bankId: bank.id, seatIndex } }),
+    db.machineHistory.create({
+      data: { machineId: machine.id, event: `Reassigned to ${bank.name}, Seat ${seatIndex + 1}` },
+    }),
+  ]);
+
+  await logMapChange("Move Bank", bank.name, bank.area.label, `${serial} reassigned to ${bank.name}, Seat ${seatIndex + 1}`);
+
+  revalidatePath("/compliance/floor");
+  revalidatePath("/compliance/machines");
+  revalidatePath("/compliance/software");
 }
 
 export async function attachMachineDocumentAction(serial: string, formData: FormData) {

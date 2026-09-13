@@ -6,10 +6,13 @@ import {
   attachMachineDocumentAction,
   getMachineDrawerDataAction,
   setMachineComplianceStatusAction,
+  updateMachineBankAction,
   updateMachineFieldsAction,
   type MachineDrawerData,
 } from "@/lib/actions/machines";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
+
+const NEW_BANK_VALUE = "__new__";
 
 const STATUS_LABEL: Record<ComplianceStatus, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
 const STAMP_TEXT: Record<ComplianceStatus, string> = {
@@ -44,6 +47,7 @@ export function MachineDrawerContent({
   const [loadedSerial, setLoadedSerial] = useState(serial);
   const [data, setData] = useState<MachineDrawerData | null>(null);
   const [editing, setEditing] = useState(false);
+  const [bankChoice, setBankChoice] = useState("");
   if (loadedSerial !== serial) {
     setLoadedSerial(serial);
     setData(null);
@@ -96,6 +100,11 @@ export function MachineDrawerContent({
   };
 
   const save = (form: FormData) => {
+    const creatingBank = bankChoice === NEW_BANK_VALUE;
+    if (creatingBank && !String(form.get("newBankName") || "").trim()) {
+      showToast("Enter a name for the new bank");
+      return;
+    }
     startTransition(async () => {
       try {
         await updateMachineFieldsAction(serial, {
@@ -105,14 +114,29 @@ export function MachineDrawerContent({
           parSheet: String(form.get("par") || ""),
           sealNumber: String(form.get("seal") || ""),
         });
+        await updateMachineBankAction(serial, {
+          bankId: !creatingBank && bankChoice ? bankChoice : undefined,
+          newBank: creatingBank
+            ? {
+                name: String(form.get("newBankName") || ""),
+                areaKey: String(form.get("newBankAreaKey") || ""),
+                capacity: parseInt(String(form.get("newBankCapacity") || ""), 10) || 4,
+              }
+            : undefined,
+        });
         showToast("Machine record saved");
         setEditing(false);
         load();
         onChanged?.();
-      } catch {
-        showToast("Could not save changes");
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Could not save changes");
       }
     });
+  };
+
+  const startEdit = () => {
+    setBankChoice(data.bankId ?? "");
+    setEditing(true);
   };
 
   const attach = () => {
@@ -144,7 +168,7 @@ export function MachineDrawerContent({
           <div className="p-id" style={{ marginTop: 4 }}>{data.serial} · {data.bankName}</div>
         </div>
         <div className="drawer-head-actions">
-          {!editing && <button className="btn btn-small" onClick={() => setEditing(true)}>Edit</button>}
+          {!editing && <button className="btn btn-small" onClick={startEdit}>Edit</button>}
           <button className="drawer-close" onClick={onClose}>✕</button>
         </div>
       </div>
@@ -170,6 +194,43 @@ export function MachineDrawerContent({
         {editing ? (
           <form action={save}>
             <div className="field-grid">
+              <div>
+                <div className="field-label">Bank</div>
+                <select
+                  className="field-input"
+                  value={bankChoice}
+                  onChange={(e) => setBankChoice(e.target.value)}
+                  disabled={pending}
+                >
+                  <option value="">— Unassigned —</option>
+                  <option value={NEW_BANK_VALUE}>+ Create New Bank…</option>
+                  {data.banks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.occupied}/{b.capacity}) — {b.areaLabel}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {bankChoice === NEW_BANK_VALUE && (
+                <>
+                  <div>
+                    <div className="field-label">New Bank Name</div>
+                    <input className="field-input" name="newBankName" placeholder="e.g. Bank 122 — West Wing" disabled={pending} />
+                  </div>
+                  <div>
+                    <div className="field-label">Capacity</div>
+                    <input className="field-input" name="newBankCapacity" type="number" min={1} max={12} defaultValue={4} disabled={pending} />
+                  </div>
+                  <div>
+                    <div className="field-label">Area</div>
+                    <select className="field-input" name="newBankAreaKey" defaultValue={data.areas[0]?.key} disabled={pending}>
+                      {data.areas.map((a) => (
+                        <option key={a.key} value={a.key}>{a.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
               <div><div className="field-label">Serial Number</div><div className="field-value">{data.serial}</div></div>
               <div><div className="field-label">Asset Number</div><div className="field-value">—</div></div>
               <div><div className="field-label">Manufacturer</div><input className="field-input" name="mfr" defaultValue={data.manufacturer} /></div>
