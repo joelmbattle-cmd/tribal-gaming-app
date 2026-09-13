@@ -50,7 +50,7 @@ async function areaKeyFromLabel(areas: { key: string; label: string }[], raw: un
   return found ? found.key : areas[0].key;
 }
 
-async function placeMachineInSeat(bankId: string, seatRaw: unknown): Promise<number> {
+export async function placeMachineInSeat(bankId: string, seatRaw: unknown): Promise<number> {
   const bank = await db.bank.findUnique({ where: { id: bankId }, include: { machines: true } });
   if (!bank) throw new Error("Bank not found");
   const occupied = new Set(bank.machines.map((m) => m.seatIndex).filter((i): i is number => i !== null));
