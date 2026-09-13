@@ -549,6 +549,29 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
   color: var(--parchment-dim); margin-bottom: 20px;
 }
 
+/* Photo adjuster — pan/zoom face-centering step shown right after a photo is
+   picked, before it's sent to the server. Sits above the record drawer. */
+.photo-adjuster-backdrop {
+  position: fixed; inset: 0; background: rgba(8, 10, 13, 0.72); z-index: 300;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.photo-adjuster-panel {
+  background: var(--panel); border: 1px solid var(--hairline-strong); border-radius: 8px;
+  padding: 20px; max-width: 340px; width: 100%; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+}
+.photo-adjuster-viewport {
+  position: relative; overflow: hidden; border-radius: 6px; background: var(--ink);
+  margin: 0 auto; cursor: grab; touch-action: none;
+}
+.photo-adjuster-viewport:active { cursor: grabbing; }
+.photo-adjuster-img { position: absolute; max-width: none; user-select: none; -webkit-user-drag: none; }
+.photo-adjuster-guide {
+  position: absolute; inset: 0; margin: auto; border-radius: 50%;
+  border: 2px solid var(--seal); box-shadow: 0 0 0 999px rgba(8, 10, 13, 0.5);
+  width: 100%; height: 100%; pointer-events: none;
+}
+.photo-adjuster-zoom { width: 100%; margin-top: 14px; accent-color: var(--seal); }
+
 .notify-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 12px; gap: 10px; }
 .notify-status { font-family: var(--font-plex-mono); font-size: 10px; white-space: nowrap; }
 .notify-sent { color: var(--verify); }

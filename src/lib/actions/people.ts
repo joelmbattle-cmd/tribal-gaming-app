@@ -59,6 +59,63 @@ export async function createPersonAction(intake: PersonIntake) {
   return person;
 }
 
+export type PersonUpdate = {
+  name: string;
+  role: string;
+  status: string;
+  dateOfBirth?: string; // yyyy-mm-dd from a date input
+  contactInfo?: string;
+  licenseType?: string;
+  licenseNumber?: string;
+  licenseIssueDate?: string;
+  licenseExpirationDate?: string;
+  applicationDate?: string;
+  applicationStatus?: string;
+  backgroundStatus?: string;
+  suitabilityDetermination?: string;
+  assignedInvestigator?: string;
+  investigationStartDate?: string;
+  investigationCompletionDate?: string;
+  keyFindings?: string;
+};
+
+export async function updatePersonAction(personId: string, intake: PersonUpdate) {
+  const user = await requireRole("LICENSING");
+
+  // Archived profiles are view-only. Checked server-side (not just hidden in
+  // the UI) so a stale drawer or a crafted request can't edit a closed
+  // profile — mirrors the Self-Exclusion edit guard.
+  const existing = await db.person.findUnique({ where: { id: personId }, select: { archived: true } });
+  if (!existing) throw new Error("Person not found");
+  if (existing.archived) throw new Error("Cannot edit an archived profile");
+
+  const person = await db.person.update({
+    where: { id: personId },
+    data: {
+      name: intake.name,
+      role: intake.role,
+      status: intake.status,
+      dateOfBirth: toDateOrNull(intake.dateOfBirth),
+      contactInfo: intake.contactInfo || null,
+      licenseType: intake.licenseType || null,
+      licenseNumber: intake.licenseNumber || null,
+      licenseIssueDate: toDateOrNull(intake.licenseIssueDate),
+      licenseExpirationDate: toDateOrNull(intake.licenseExpirationDate),
+      applicationDate: toDateOrNull(intake.applicationDate),
+      applicationStatus: intake.applicationStatus || null,
+      backgroundStatus: intake.backgroundStatus || null,
+      suitabilityDetermination: intake.suitabilityDetermination || null,
+      assignedInvestigator: intake.assignedInvestigator || null,
+      investigationStartDate: toDateOrNull(intake.investigationStartDate),
+      investigationCompletionDate: toDateOrNull(intake.investigationCompletionDate),
+      keyFindings: intake.keyFindings || null,
+      lastModifiedBy: user.name,
+    },
+  });
+  revalidatePath("/licensing/profiles");
+  return person;
+}
+
 export async function uploadPersonPhotoAction(personId: string, formData: FormData) {
   const user = await requireRole("LICENSING");
   const file = formData.get("file") as File | null;

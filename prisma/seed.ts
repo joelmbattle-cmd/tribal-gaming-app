@@ -6,11 +6,11 @@ import bcrypt from "bcryptjs";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const db = new PrismaClient({ adapter });
 
-// Fabricated demo "photo on file" for seeded exclusion records — a generic
-// head-and-shoulders silhouette on a flat color, encoded inline so the demo
-// has faces in the list without depending on a network image host or
-// committing binary assets.
-function fakeExclusionPhoto(bg: string): string {
+// Fabricated demo "photo on file" for seeded exclusion and person records —
+// a generic head-and-shoulders silhouette on a flat color, encoded inline so
+// the demo has faces in the list without depending on a network image host
+// or committing binary assets.
+function fakeDemoPhoto(bg: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
     <rect width="100" height="100" fill="${bg}"/>
     <circle cx="50" cy="38" r="18" fill="#efe7d6"/>
@@ -240,6 +240,7 @@ async function main() {
       name: "Marcus Whitfield",
       role: "Applicant — Key Employee",
       status: "investigation",
+      photoUrl: fakeDemoPhoto("#4a3f5c"),
       dateOfBirth: new Date("1985-02-19"),
       contactInfo: "(602) 555-0142 · m.whitfield@example.com",
       licenseType: "Key",
@@ -275,6 +276,7 @@ async function main() {
       name: "Dana Ochoa",
       role: "Applicant — Gaming Employee",
       status: "cleared",
+      photoUrl: fakeDemoPhoto("#3f544a"),
       dateOfBirth: new Date("1992-11-30"),
       contactInfo: "(602) 555-0187 · dana.ochoa@example.com",
       licenseType: "Employee",
@@ -313,6 +315,7 @@ async function main() {
       name: "Priya Ramanathan",
       role: "Vendor — Gaming Equipment",
       status: "flagged",
+      photoUrl: fakeDemoPhoto("#5c4a3f"),
       dateOfBirth: new Date("1980-06-05"),
       contactInfo: "(480) 555-0119 · p.ramanathan@vendorco.example",
       licenseType: "Vendor",
@@ -499,7 +502,7 @@ async function main() {
       status: "Active",
       enrolled: new Date("2025-11-02"),
       term: "5-year term",
-      photoUrl: fakeExclusionPhoto("#5c4a2e"),
+      photoUrl: fakeDemoPhoto("#5c4a2e"),
       personName: "Harold J. Whitmore",
       dateOfBirth: new Date("1978-04-12"),
       governmentId: "Tribal ID# TGA-004471",
@@ -523,7 +526,7 @@ async function main() {
       status: "Active",
       enrolled: new Date("2025-06-20"),
       term: "Lifetime term",
-      photoUrl: fakeExclusionPhoto("#3f5443"),
+      photoUrl: fakeDemoPhoto("#3f5443"),
       personName: "Linda R. Castillo",
       aliases: "Linda Reyes",
       dateOfBirth: new Date("1965-09-03"),

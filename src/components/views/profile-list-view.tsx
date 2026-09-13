@@ -6,7 +6,8 @@ import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { preparePhoto } from "@/lib/image-client";
-import { createPersonAction, uploadPersonPhotoAction, addPersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
+import { PhotoAdjuster } from "@/components/photo-adjuster";
+import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
   id: string;
@@ -49,6 +50,10 @@ const APPLICATION_STATUS_OPTIONS = ["Received", "Under Review", "Additional Info
 const BACKGROUND_STATUS_OPTIONS = ["Not Started", "In Review", "Approved", "Denied", "Needs Info"];
 const SUITABILITY_OPTIONS = ["Pending", "Suitable", "Unsuitable"];
 
+function initials(name: string): string {
+  return name.split(" ").map((w) => w[0]).join("");
+}
+
 export function ProfileListView({ people, showArchived }: { people: ProfileViewItem[]; showArchived: boolean }) {
   const variant = useShellVariant();
   const pathname = usePathname();
@@ -58,6 +63,29 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   // Holds the id being confirmed. Cleared whenever the drawer opens or closes
   // so a record can never appear pre-armed when it is reopened.
   const [confirmingArchive, setConfirmingArchive] = useState<string | null>(null);
+  // Holds the id being edited. Cleared whenever the drawer opens or closes,
+  // same reasoning as confirmingArchive above.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState("");
+  const [editPersonStatus, setEditPersonStatus] = useState("investigation");
+  const [editDateOfBirth, setEditDateOfBirth] = useState("");
+  const [editContactInfo, setEditContactInfo] = useState("");
+  const [editLicenseType, setEditLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
+  const [editLicenseNumber, setEditLicenseNumber] = useState("");
+  const [editLicenseIssueDate, setEditLicenseIssueDate] = useState("");
+  const [editLicenseExpirationDate, setEditLicenseExpirationDate] = useState("");
+  const [editApplicationDate, setEditApplicationDate] = useState("");
+  const [editApplicationStatus, setEditApplicationStatus] = useState(APPLICATION_STATUS_OPTIONS[0]);
+  const [editBackgroundStatus, setEditBackgroundStatus] = useState(BACKGROUND_STATUS_OPTIONS[0]);
+  const [editSuitabilityDetermination, setEditSuitabilityDetermination] = useState(SUITABILITY_OPTIONS[0]);
+  const [editAssignedInvestigator, setEditAssignedInvestigator] = useState("");
+  const [editInvestigationStartDate, setEditInvestigationStartDate] = useState("");
+  const [editInvestigationCompletionDate, setEditInvestigationCompletionDate] = useState("");
+  const [editKeyFindings, setEditKeyFindings] = useState("");
+  // Holds a freshly-picked photo while the operator centers the face in the
+  // adjuster, before it's cropped and handed to the upload action.
+  const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [personStatus, setPersonStatus] = useState("investigation");
@@ -142,12 +170,20 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !selected) return;
+    setAdjustingPhoto(file);
+  };
+
+  const cancelPhotoAdjust = () => setAdjustingPhoto(null);
+
+  const confirmPhotoAdjust = (cropped: File) => {
+    setAdjustingPhoto(null);
+    if (!selected) return;
 
     startTransition(async () => {
       try {
         // Downscale before sending: a camera photo exceeds the server action
         // body limit and would be rejected before reaching the upload code.
-        const prepared = await preparePhoto(file);
+        const prepared = await preparePhoto(cropped);
         const formData = new FormData();
         formData.set("file", prepared);
 
@@ -201,12 +237,72 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
 
   const openRecord = (id: string) => {
     setConfirmingArchive(null);
+    setEditingId(null);
     setSelected(id);
   };
 
   const closeRecord = () => {
     setConfirmingArchive(null);
+    setEditingId(null);
     setSelected(null);
+  };
+
+  const startEdit = (p: ProfileViewItem) => {
+    setEditName(p.name);
+    setEditRole(p.role);
+    setEditPersonStatus(p.status);
+    setEditDateOfBirth(p.dateOfBirth ?? "");
+    setEditContactInfo(p.contactInfo ?? "");
+    setEditLicenseType(p.licenseType ?? LICENSE_TYPE_OPTIONS[0]);
+    setEditLicenseNumber(p.licenseNumber ?? "");
+    setEditLicenseIssueDate(p.licenseIssueDate ?? "");
+    setEditLicenseExpirationDate(p.licenseExpirationDate ?? "");
+    setEditApplicationDate(p.applicationDate ?? "");
+    setEditApplicationStatus(p.applicationStatus ?? APPLICATION_STATUS_OPTIONS[0]);
+    setEditBackgroundStatus(p.backgroundStatus ?? BACKGROUND_STATUS_OPTIONS[0]);
+    setEditSuitabilityDetermination(p.suitabilityDetermination ?? SUITABILITY_OPTIONS[0]);
+    setEditAssignedInvestigator(p.assignedInvestigator ?? "");
+    setEditInvestigationStartDate(p.investigationStartDate ?? "");
+    setEditInvestigationCompletionDate(p.investigationCompletionDate ?? "");
+    setEditKeyFindings(p.keyFindings ?? "");
+    setEditingId(p.id);
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
+  const saveEdit = () => {
+    if (!editName.trim() || !editRole.trim()) {
+      showToast("Full legal name and role are required");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await updatePersonAction(editingId!, {
+          name: editName.trim(),
+          role: editRole.trim(),
+          status: editPersonStatus,
+          dateOfBirth: editDateOfBirth,
+          contactInfo: editContactInfo.trim(),
+          licenseType: editLicenseType,
+          licenseNumber: editLicenseNumber.trim(),
+          licenseIssueDate: editLicenseIssueDate,
+          licenseExpirationDate: editLicenseExpirationDate,
+          applicationDate: editApplicationDate,
+          applicationStatus: editApplicationStatus,
+          backgroundStatus: editBackgroundStatus,
+          suitabilityDetermination: editSuitabilityDetermination,
+          assignedInvestigator: editAssignedInvestigator.trim(),
+          investigationStartDate: editInvestigationStartDate,
+          investigationCompletionDate: editInvestigationCompletionDate,
+          keyFindings: editKeyFindings.trim(),
+        });
+        setEditingId(null);
+        showToast("Profile updated");
+        router.refresh();
+      } catch {
+        showToast("Failed to update profile");
+      }
+    });
   };
 
   const archive = () => {
@@ -272,7 +368,15 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
         )}
         {people.map((p) => (
           <button key={p.id} className="profile-row" onClick={() => openRecord(p.id)}>
-            <div className="avatar">{p.name.split(" ").map((w) => w[0]).join("")}</div>
+            {p.photoUrl ? (
+              // Plain <img>: the source is either a blob URL or an inline
+              // data URL, and next/image handles neither without extra
+              // remote-pattern configuration.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="avatar-photo" src={p.photoUrl} alt="" />
+            ) : (
+              <div className="avatar">{initials(p.name)}</div>
+            )}
             <div><div className="p-name">{p.name}</div><div className="p-id">{p.id}</div></div>
             <div className="p-id">
               {showArchived ? `Archived ${p.archivedAt ?? ""} by ${p.archivedBy || "—"}` : p.role}
@@ -284,7 +388,12 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
       </div>
 
       <ResponsiveOverlay open={!!selected} onClose={closeRecord}>
-        {person && (
+        {person && (() => {
+          // Re-derived from the current record (not just editingId) so a
+          // profile archived out from under an open edit immediately drops
+          // back to view-only instead of leaving stale inputs on screen.
+          const isEditing = editingId === person.id && !person.archived;
+          return (
           <>
             <div className="drawer-head">
               <div>
@@ -320,38 +429,172 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
                 {person.photoUrl ? "Update Photo" : "+ Add Photo"}
               </button>
 
+              {!person.archived && (
+                <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                  {isEditing ? (
+                    <>
+                      <button className="btn btn-primary" disabled={pending} onClick={saveEdit}>
+                        Save Changes
+                      </button>
+                      <button className="btn" disabled={pending} onClick={cancelEdit}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn" disabled={pending} onClick={() => startEdit(person)}>
+                      Edit Details
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="section-label" style={{ marginTop: 16 }}>Identification</div>
-              <div className="field-grid">
-                <div><div className="field-label">Profile ID</div><div className="field-value">{person.id}</div></div>
-                <div><div className="field-label">Category</div><div className="field-value" style={{ fontFamily: "var(--font-plex-sans)", fontSize: 12.5 }}>{person.role}</div></div>
-                <div><div className="field-label">Date of Birth</div><div className="field-value">{person.dateOfBirth || "—"}</div></div>
-                <div><div className="field-label">Contact Info</div><div className="field-value">{person.contactInfo || "—"}</div></div>
-              </div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">Full Legal Name</label>
+                    <input type="text" className="field-input" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Category</label>
+                    <input type="text" className="field-input" value={editRole} onChange={(e) => setEditRole(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Status</label>
+                    <select className="field-input" value={editPersonStatus} onChange={(e) => setEditPersonStatus(e.target.value)} disabled={pending}>
+                      <option value="cleared">Cleared</option>
+                      <option value="flagged">Flagged</option>
+                      <option value="investigation">Under Investigation</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Date of Birth</label>
+                    <input type="date" className="field-input" value={editDateOfBirth} onChange={(e) => setEditDateOfBirth(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Contact Info</label>
+                    <input type="text" className="field-input" value={editContactInfo} onChange={(e) => setEditContactInfo(e.target.value)} disabled={pending} />
+                  </div>
+                  <div><div className="field-label">Profile ID</div><div className="field-value">{person.id}</div></div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Profile ID</div><div className="field-value">{person.id}</div></div>
+                  <div><div className="field-label">Category</div><div className="field-value" style={{ fontFamily: "var(--font-plex-sans)", fontSize: 12.5 }}>{person.role}</div></div>
+                  <div><div className="field-label">Date of Birth</div><div className="field-value">{person.dateOfBirth || "—"}</div></div>
+                  <div><div className="field-label">Contact Info</div><div className="field-value">{person.contactInfo || "—"}</div></div>
+                </div>
+              )}
 
               <div className="section-label">License</div>
-              <div className="field-grid">
-                <div><div className="field-label">License Type</div><div className="field-value">{person.licenseType || "—"}</div></div>
-                <div><div className="field-label">License Number</div><div className="field-value">{person.licenseNumber || "—"}</div></div>
-                <div><div className="field-label">Issue Date</div><div className="field-value">{person.licenseIssueDate || "—"}</div></div>
-                <div><div className="field-label">Expiration Date</div><div className="field-value">{person.licenseExpirationDate || "—"}</div></div>
-              </div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">License Type</label>
+                    <select className="field-input" value={editLicenseType} onChange={(e) => setEditLicenseType(e.target.value)} disabled={pending}>
+                      {LICENSE_TYPE_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">License Number</label>
+                    <input type="text" className="field-input" value={editLicenseNumber} onChange={(e) => setEditLicenseNumber(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Issue Date</label>
+                    <input type="date" className="field-input" value={editLicenseIssueDate} onChange={(e) => setEditLicenseIssueDate(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Expiration Date</label>
+                    <input type="date" className="field-input" value={editLicenseExpirationDate} onChange={(e) => setEditLicenseExpirationDate(e.target.value)} disabled={pending} />
+                  </div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">License Type</div><div className="field-value">{person.licenseType || "—"}</div></div>
+                  <div><div className="field-label">License Number</div><div className="field-value">{person.licenseNumber || "—"}</div></div>
+                  <div><div className="field-label">Issue Date</div><div className="field-value">{person.licenseIssueDate || "—"}</div></div>
+                  <div><div className="field-label">Expiration Date</div><div className="field-value">{person.licenseExpirationDate || "—"}</div></div>
+                </div>
+              )}
 
               <div className="section-label">Application &amp; Status</div>
-              <div className="field-grid">
-                <div><div className="field-label">Application Date</div><div className="field-value">{person.applicationDate || "—"}</div></div>
-                <div><div className="field-label">Application Status</div><div className="field-value">{person.applicationStatus || "—"}</div></div>
-                <div><div className="field-label">Background Status</div><div className="field-value">{person.backgroundStatus || "—"}</div></div>
-                <div><div className="field-label">Suitability Determination</div><div className="field-value">{person.suitabilityDetermination || "—"}</div></div>
-              </div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">Application Date</label>
+                    <input type="date" className="field-input" value={editApplicationDate} onChange={(e) => setEditApplicationDate(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Application Status</label>
+                    <select className="field-input" value={editApplicationStatus} onChange={(e) => setEditApplicationStatus(e.target.value)} disabled={pending}>
+                      {APPLICATION_STATUS_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Background Status</label>
+                    <select className="field-input" value={editBackgroundStatus} onChange={(e) => setEditBackgroundStatus(e.target.value)} disabled={pending}>
+                      {BACKGROUND_STATUS_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Suitability Determination</label>
+                    <select className="field-input" value={editSuitabilityDetermination} onChange={(e) => setEditSuitabilityDetermination(e.target.value)} disabled={pending}>
+                      {SUITABILITY_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Application Date</div><div className="field-value">{person.applicationDate || "—"}</div></div>
+                  <div><div className="field-label">Application Status</div><div className="field-value">{person.applicationStatus || "—"}</div></div>
+                  <div><div className="field-label">Background Status</div><div className="field-value">{person.backgroundStatus || "—"}</div></div>
+                  <div><div className="field-label">Suitability Determination</div><div className="field-value">{person.suitabilityDetermination || "—"}</div></div>
+                </div>
+              )}
 
               <div className="section-label">Investigation Tracking</div>
-              <div className="field-grid">
-                <div><div className="field-label">Assigned Investigator</div><div className="field-value">{person.assignedInvestigator || "—"}</div></div>
-                <div><div className="field-label">Investigation Start</div><div className="field-value">{person.investigationStartDate || "—"}</div></div>
-                <div><div className="field-label">Investigation Completion</div><div className="field-value">{person.investigationCompletionDate || "—"}</div></div>
-              </div>
-              <div className="field-label" style={{ marginTop: 12 }}>Key Findings</div>
-              <div className="field-value">{person.keyFindings || "—"}</div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">Assigned Investigator</label>
+                    <input type="text" className="field-input" value={editAssignedInvestigator} onChange={(e) => setEditAssignedInvestigator(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Investigation Start</label>
+                    <input type="date" className="field-input" value={editInvestigationStartDate} onChange={(e) => setEditInvestigationStartDate(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Investigation Completion</label>
+                    <input type="date" className="field-input" value={editInvestigationCompletionDate} onChange={(e) => setEditInvestigationCompletionDate(e.target.value)} disabled={pending} />
+                  </div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Assigned Investigator</div><div className="field-value">{person.assignedInvestigator || "—"}</div></div>
+                  <div><div className="field-label">Investigation Start</div><div className="field-value">{person.investigationStartDate || "—"}</div></div>
+                  <div><div className="field-label">Investigation Completion</div><div className="field-value">{person.investigationCompletionDate || "—"}</div></div>
+                </div>
+              )}
+
+              {isEditing ? (
+                <div style={{ marginTop: 12 }}>
+                  <label className="field-label">Key Findings</label>
+                  <textarea className="field-input" rows={3} value={editKeyFindings} onChange={(e) => setEditKeyFindings(e.target.value)} disabled={pending} />
+                </div>
+              ) : (
+                <>
+                  <div className="field-label" style={{ marginTop: 12 }}>Key Findings</div>
+                  <div className="field-value">{person.keyFindings || "—"}</div>
+                </>
+              )}
 
               <div className="section-label">Attached Documents ({person.documents.length})</div>
               {person.documents.map((d) => (
@@ -411,7 +654,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
               </div>
             </div>
           </>
-        )}
+          );
+        })()}
       </ResponsiveOverlay>
 
       <ResponsiveOverlay open={showCreateForm} onClose={() => setShowCreateForm(false)}>
@@ -640,6 +884,10 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
           </div>
         </div>
       </ResponsiveOverlay>
+
+      {adjustingPhoto && (
+        <PhotoAdjuster file={adjustingPhoto} onCancel={cancelPhotoAdjust} onConfirm={confirmPhotoAdjust} />
+      )}
     </div>
   );
 }
