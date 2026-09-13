@@ -202,7 +202,7 @@ body.map-fullscreen .m-map-wrap { margin: 0; }
 .map-zone-label {
   position: absolute; top: 8px; left: 12px; font-family: var(--font-plex-mono); font-size: 10px;
   text-transform: uppercase; letter-spacing: 0.14em; color: var(--parchment-dim);
-  display: flex; align-items: center; gap: 10px; pointer-events: none;
+  display: flex; align-items: center; gap: 10px; pointer-events: none; z-index: 2;
 }
 .zone-expand-btn {
   font-family: var(--font-plex-mono); font-size: 9px; letter-spacing: 0.04em; text-transform: none;

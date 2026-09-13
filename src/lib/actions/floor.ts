@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
-import { BANK_W, EDGE_GROW, MAX_BANK_CAPACITY } from "@/lib/floor-constants";
+import { BANK_W, EDGE_GROW, MAX_BANK_CAPACITY, MIN_AREA_HEIGHT, estimateBankHeight } from "@/lib/floor-constants";
 
 async function areaForY(y: number) {
   const areas = await db.area.findMany({ orderBy: { order: "asc" } });
@@ -173,6 +173,36 @@ export async function growZoneHeightAction(areaKey: string, amount: number = EDG
     for (const below of areasBelow) {
       await tx.area.update({ where: { id: below.id }, data: { y: below.y + grow } });
       await tx.bank.updateMany({ where: { areaId: below.id }, data: { y: { increment: grow } } });
+    }
+  });
+
+  revalidatePath("/compliance/floor");
+}
+
+export async function shrinkZoneHeightAction(areaKey: string, amount: number = EDGE_GROW * 0.7) {
+  await requireRole("COMPLIANCE");
+  const area = await db.area.findUnique({ where: { key: areaKey }, include: { banks: true } });
+  if (!area) throw new Error("Not found");
+  const shrink = Math.round(amount);
+
+  const contentBottom = area.banks.reduce(
+    (max, b) => Math.max(max, b.y - area.y + estimateBankHeight(b.capacity) + 24),
+    0,
+  );
+  const minHeight = Math.max(MIN_AREA_HEIGHT, contentBottom);
+  const newHeight = Math.max(minHeight, area.h - shrink);
+  const actualShrink = area.h - newHeight;
+  if (actualShrink <= 0) {
+    throw new Error("This area is already at its minimum height for the banks it contains.");
+  }
+
+  const areasBelow = await db.area.findMany({ where: { order: { gt: area.order } } });
+
+  await db.$transaction(async (tx) => {
+    await tx.area.update({ where: { id: area.id }, data: { h: newHeight } });
+    for (const below of areasBelow) {
+      await tx.area.update({ where: { id: below.id }, data: { y: below.y - actualShrink } });
+      await tx.bank.updateMany({ where: { areaId: below.id }, data: { y: { decrement: actualShrink } } });
     }
   });
 

@@ -11,11 +11,12 @@ import { downloadImportTemplate, exportRowsToExcel, readWorkbookRows } from "@/l
 import { getMachinesForExportAction, importMachinesAction } from "@/lib/actions/import-export";
 import { createMachineAction } from "@/lib/actions/machines";
 import type { MachineListItem } from "@/lib/data/machines";
+import type { BankOption } from "@/lib/data/floor";
 
 const STATUS_LABEL: Record<string, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
 const STATUS_CHIP: Record<string, string> = { VERIFIED: "chip-cleared", FLAGGED: "chip-flagged", PENDING: "chip-investigation" };
 
-export function MachineListView({ machines }: { machines: MachineListItem[] }) {
+export function MachineListView({ machines, banks }: { machines: MachineListItem[]; banks: BankOption[] }) {
   const variant = useShellVariant();
   const [selected, setSelected] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -28,6 +29,7 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
   const [theme, setTheme] = useState("");
   const [parSheet, setParSheet] = useState("");
   const [sealNumber, setSealNumber] = useState("");
+  const [bankId, setBankId] = useState("");
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const showToast = useToast();
@@ -61,6 +63,7 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
     setTheme("");
     setParSheet("");
     setSealNumber("");
+    setBankId("");
   };
 
   const createMachine = () => {
@@ -78,6 +81,7 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
           theme: theme.trim(),
           parSheet: parSheet.trim(),
           sealNumber: sealNumber.trim(),
+          bankId: bankId || undefined,
         });
         resetCreateForm();
         setShowCreateForm(false);
@@ -188,10 +192,28 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
         </div>
         <div className="drawer-body">
           <div className="field-label" style={{ marginBottom: 4 }}>
-            Placed on the Interactive Floor Map in the Unassigned bank — move it to a real bank there once seated.
+            {bankId
+              ? "Will be seated in the selected bank on the Interactive Floor Map."
+              : "Leave Bank blank to place it in the Unassigned bank — move it to a real bank there once seated."}
           </div>
           <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Machine Master Fields</div>
           <div className="field-grid">
+            <div>
+              <label className="field-label">Bank</label>
+              <select
+                className="field-input"
+                value={bankId}
+                onChange={(e) => setBankId(e.target.value)}
+                disabled={pending}
+              >
+                <option value="">— Unassigned —</option>
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.occupied}/{b.capacity}) — {b.areaLabel}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="field-label">Serial Number</label>
               <input
