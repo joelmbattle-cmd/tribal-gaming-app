@@ -210,6 +210,12 @@ body.map-fullscreen .m-map-wrap { margin: 0; }
   border-radius: 2px; padding: 3px 8px; pointer-events: auto; opacity: 0.7; min-height: 26px;
 }
 .zone-expand-btn:hover { border-color: var(--seal); color: var(--seal); opacity: 1; }
+.zone-label-input {
+  font-family: var(--font-plex-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
+  color: var(--parchment); background: var(--panel-light); border: 1px solid var(--hairline-strong);
+  border-radius: 2px; padding: 3px 6px; pointer-events: auto; min-width: 120px;
+}
+.zone-label-input:focus { outline: none; border-color: var(--seal); }
 
 .bank {
   position: absolute; border: 1px solid var(--hairline-strong); border-radius: 3px; background: var(--panel);

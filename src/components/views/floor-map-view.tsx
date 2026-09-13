@@ -16,6 +16,7 @@ import {
   growMapWidthAction,
   growZoneHeightAction,
   moveMachineSlotAction,
+  renameAreaAction,
   setBankAreaAction,
 } from "@/lib/actions/floor";
 import type { FloorArea, FloorBank, FloorSeat } from "@/lib/data/floor";
@@ -371,6 +372,20 @@ export function FloorMapView({
     catch { showToast("Could not expand area"); }
   };
 
+  const renameArea = async (areaKey: string, label: string) => {
+    const trimmed = label.trim();
+    const current = areaList.find((a) => a.key === areaKey);
+    if (!trimmed || !current || trimmed === current.label) return;
+    setAreaList((list) => list.map((a) => (a.key === areaKey ? { ...a, label: trimmed } : a)));
+    try {
+      await renameAreaAction(areaKey, trimmed);
+      showToast("Area renamed");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not rename area");
+    }
+    router.refresh();
+  };
+
   const doExport = async () => {
     const rows = await getMachinesForExportAction();
     const ok = exportRowsToExcel(rows, "machine-records");
@@ -468,7 +483,21 @@ export function FloorMapView({
             {areaList.map((a) => (
               <div key={a.key} className="map-zone" style={{ top: a.y, height: a.h }}>
                 <div className="map-zone-label">
-                  {a.label}
+                  {editMode ? (
+                    <input
+                      key={a.label}
+                      className="zone-label-input mono"
+                      defaultValue={a.label}
+                      onBlur={(e) => renameArea(a.key, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        if (e.key === "Escape") { (e.target as HTMLInputElement).value = a.label; (e.target as HTMLInputElement).blur(); }
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    a.label
+                  )}
                   <button className="zone-expand-btn" onClick={() => growZone(a.key)} title="Expand this area">+ Expand Area</button>
                 </div>
               </div>
