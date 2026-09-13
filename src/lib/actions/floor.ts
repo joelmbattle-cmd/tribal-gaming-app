@@ -152,6 +152,7 @@ export async function addBankAction(name: string, areaKey: string, capacity: num
   });
   await logMapChange("Other", bank.name, area.label, `New bank created in ${area.label}`);
   revalidatePath("/compliance/floor");
+  return { ...bank, area };
 }
 
 export async function growMapWidthAction(amount: number = EDGE_GROW) {

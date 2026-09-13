@@ -1,8 +1,8 @@
 import { getMachineList } from "@/lib/data/machines";
-import { getBankOptions } from "@/lib/data/floor";
+import { getAreas, getBankOptions } from "@/lib/data/floor";
 import { MachineListView } from "@/components/views/machine-list-view";
 
 export default async function MachinesPage() {
-  const [machines, banks] = await Promise.all([getMachineList(), getBankOptions()]);
-  return <MachineListView machines={machines} banks={banks} />;
+  const [machines, banks, areas] = await Promise.all([getMachineList(), getBankOptions(), getAreas()]);
+  return <MachineListView machines={machines} banks={banks} areas={areas} />;
 }

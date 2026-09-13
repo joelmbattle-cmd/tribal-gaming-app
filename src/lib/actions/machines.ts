@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 import { uploadDocument } from "@/lib/blob";
-import { logMapChange, nextBankPosition } from "@/lib/actions/floor";
+import { addBankAction, logMapChange, nextBankPosition } from "@/lib/actions/floor";
 import { placeMachineInSeat } from "@/lib/actions/import-export";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
 
@@ -23,6 +23,7 @@ export type NewMachineFields = {
   parSheet: string;
   sealNumber?: string;
   bankId?: string;
+  newBank?: { name: string; areaKey: string; capacity: number };
 };
 
 // New machines land on a shared "Unassigned" bank so they're visible on the
@@ -43,9 +44,14 @@ async function findOrCreateUnassignedBank() {
   return { ...bank, area };
 }
 
-async function resolveTargetBank(bankId?: string) {
-  if (!bankId) return findOrCreateUnassignedBank();
-  const bank = await db.bank.findUnique({ where: { id: bankId }, include: { area: true } });
+async function resolveTargetBank(fields: NewMachineFields) {
+  if (fields.newBank) {
+    const name = fields.newBank.name.trim();
+    if (!name) throw new Error("New bank name is required");
+    return addBankAction(name, fields.newBank.areaKey, fields.newBank.capacity);
+  }
+  if (!fields.bankId) return findOrCreateUnassignedBank();
+  const bank = await db.bank.findUnique({ where: { id: fields.bankId }, include: { area: true } });
   if (!bank) throw new Error("Selected bank not found");
   return bank;
 }
@@ -68,7 +74,7 @@ export async function createMachineAction(fields: NewMachineFields) {
   const existing = await db.machine.findUnique({ where: { serial } });
   if (existing) throw new Error(`A machine with serial ${serial} already exists`);
 
-  const bank = await resolveTargetBank(fields.bankId);
+  const bank = await resolveTargetBank(fields);
   const seatIndex = await placeMachineInSeat(bank.id, undefined);
 
   await db.machine.create({

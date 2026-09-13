@@ -175,12 +175,13 @@ main.content { flex: 1; padding: 26px 32px; min-width: 0; position: relative; }
 
 .map-viewport {
   position: relative; width: 100%; height: clamp(560px, 78vh, 920px); overflow: hidden;
-  border: 1px solid var(--hairline-strong); border-radius: 3px; background-color: var(--ink);
+  border: 2px solid var(--seal); border-radius: 4px; background-color: var(--ink);
   background-image: linear-gradient(rgba(239, 231, 214, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(239, 231, 214, 0.045) 1px, transparent 1px);
   background-size: 32px 32px; cursor: grab; touch-action: none;
+  box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.25);
 }
 .map-viewport.panning { cursor: grabbing; }
-.map-viewport.fullscreen { position: fixed; inset: 16px; width: auto; height: auto; z-index: 150; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65); }
+.map-viewport.fullscreen { position: fixed; inset: 16px; width: auto; height: auto; z-index: 150; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(200, 155, 60, 0.25); }
 .map-fullscreen-backdrop { display: none; }
 .map-fullscreen-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(8, 10, 13, 0.72); z-index: 149; }
 
@@ -188,10 +189,11 @@ main.content { flex: 1; padding: 26px 32px; min-width: 0; position: relative; }
 .m-map-viewport {
   position: relative; width: 100%; height: calc(100dvh - var(--header-h) - var(--tabbar-h) - 92px);
   min-height: 380px; overflow: hidden; background-color: var(--ink);
+  border: 2px solid var(--seal); box-sizing: border-box;
   background-image: linear-gradient(rgba(239, 231, 214, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(239, 231, 214, 0.045) 1px, transparent 1px);
   background-size: 28px 28px; touch-action: none;
 }
-.m-map-viewport.fullscreen { position: fixed; inset: 0; z-index: 80; height: auto; width: auto; padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
+.m-map-viewport.fullscreen { position: fixed; inset: 0; z-index: 80; height: auto; width: auto; padding-top: var(--safe-t); padding-bottom: var(--safe-b); border-width: 0; }
 body.map-fullscreen .m-header, body.map-fullscreen .m-tabbar, body.map-fullscreen .poc-banner, body.map-fullscreen .m-map-legend { display: none; }
 body.map-fullscreen .m-content { padding: 0; }
 body.map-fullscreen .m-map-wrap { margin: 0; }
