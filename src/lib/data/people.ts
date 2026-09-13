@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 
-export async function getPersonList() {
+export async function getPersonList(showArchived = false) {
   return db.person.findMany({
-    where: { archived: false },
+    where: { archived: showArchived },
     orderBy: { name: "asc" },
     include: { documents: { orderBy: { date: "asc" } }, history: { orderBy: { date: "asc" } } },
   });

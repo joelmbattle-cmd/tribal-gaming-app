@@ -1,10 +1,17 @@
 import { getPersonList } from "@/lib/data/people";
 import { ProfileListView } from "@/components/views/profile-list-view";
 
-export default async function ProfilesPage() {
-  const people = await getPersonList();
+export default async function ProfilesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ archived?: string }>;
+}) {
+  const params = await searchParams;
+  const showArchived = params.archived === "1";
+  const people = await getPersonList(showArchived);
   return (
     <ProfileListView
+      showArchived={showArchived}
       people={people.map((p) => ({
         id: p.id,
         name: p.name,
@@ -27,6 +34,11 @@ export default async function ProfilesPage() {
         keyFindings: p.keyFindings,
         createdBy: p.createdBy,
         lastModifiedBy: p.lastModifiedBy,
+        archived: p.archived,
+        archivedAt: p.archivedAt ? p.archivedAt.toISOString().slice(0, 10) : null,
+        archivedBy: p.archivedBy,
+        restoredAt: p.restoredAt ? p.restoredAt.toISOString().slice(0, 10) : null,
+        restoredBy: p.restoredBy,
         documents: p.documents.map((d) => ({ id: d.id, name: d.name, date: d.date ? d.date.toISOString().slice(0, 10) : null })),
         history: p.history.map((h) => ({ id: h.id, date: h.date.toISOString().slice(0, 10), event: h.event })),
       }))}
