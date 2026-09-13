@@ -165,6 +165,28 @@ export async function growZoneHeightAction(areaKey: string, amount: number = EDG
   await requireRole("COMPLIANCE");
   const area = await db.area.findUnique({ where: { key: areaKey } });
   if (!area) throw new Error("Not found");
-  await db.area.update({ where: { id: area.id }, data: { h: area.h + Math.round(amount) } });
+  const grow = Math.round(amount);
+  const areasBelow = await db.area.findMany({ where: { order: { gt: area.order } } });
+
+  await db.$transaction(async (tx) => {
+    await tx.area.update({ where: { id: area.id }, data: { h: area.h + grow } });
+    for (const below of areasBelow) {
+      await tx.area.update({ where: { id: below.id }, data: { y: below.y + grow } });
+      await tx.bank.updateMany({ where: { areaId: below.id }, data: { y: { increment: grow } } });
+    }
+  });
+
+  revalidatePath("/compliance/floor");
+}
+
+export async function renameAreaAction(areaKey: string, label: string) {
+  await requireRole("COMPLIANCE");
+  const trimmed = label.trim();
+  if (!trimmed) throw new Error("Area name cannot be empty");
+  const area = await db.area.findUnique({ where: { key: areaKey } });
+  if (!area) throw new Error("Not found");
+  if (trimmed === area.label) return;
+  await db.area.update({ where: { id: area.id }, data: { label: trimmed } });
+  await logMapChange("Other", "Area", trimmed, `Renamed "${area.label}" to "${trimmed}"`);
   revalidatePath("/compliance/floor");
 }
