@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 import { uploadDocument } from "@/lib/blob";
+import { logMapChange, nextBankPosition } from "@/lib/actions/floor";
+import { placeMachineInSeat } from "@/lib/actions/import-export";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
 
 const STATUS_LABEL: Record<ComplianceStatus, string> = {
@@ -11,6 +13,76 @@ const STATUS_LABEL: Record<ComplianceStatus, string> = {
   FLAGGED: "Flagged",
   PENDING: "Pending",
 };
+
+export type NewMachineFields = {
+  serial: string;
+  assetNumber: string;
+  manufacturer: string;
+  model: string;
+  theme: string;
+  parSheet: string;
+  sealNumber?: string;
+};
+
+// New machines land on a shared "Unassigned" bank so they're visible on the
+// Interactive Floor Map immediately — operators move them to a real bank
+// afterward using the existing seat drag-and-drop flow.
+async function findOrCreateUnassignedBank() {
+  const existing = await db.bank.findFirst({
+    where: { name: { equals: "Unassigned", mode: "insensitive" } },
+    include: { area: true },
+  });
+  if (existing) return existing;
+
+  const areas = await db.area.findMany({ orderBy: { order: "asc" } });
+  const areaKey = (areas.find((a) => a.key.toLowerCase() === "other") ?? areas[areas.length - 1]).key;
+  const { x, y, area } = await nextBankPosition(areaKey);
+  const bank = await db.bank.create({ data: { name: "Unassigned", areaId: area.id, x, y, capacity: 1 } });
+  return { ...bank, area };
+}
+
+export async function createMachineAction(fields: NewMachineFields) {
+  await requireRole("COMPLIANCE");
+
+  const serial = fields.serial.trim();
+  const assetNumber = fields.assetNumber.trim();
+  const manufacturer = fields.manufacturer.trim();
+  const model = fields.model.trim();
+  const theme = fields.theme.trim();
+  const parSheet = fields.parSheet.trim();
+  const sealNumber = (fields.sealNumber ?? "").trim();
+
+  if (!serial || !assetNumber || !manufacturer || !model || !theme || !parSheet) {
+    throw new Error("Serial number, asset number, manufacturer, model, game theme, and PAR sheet are required");
+  }
+
+  const existing = await db.machine.findUnique({ where: { serial } });
+  if (existing) throw new Error(`A machine with serial ${serial} already exists`);
+
+  const bank = await findOrCreateUnassignedBank();
+  const seatIndex = await placeMachineInSeat(bank.id, undefined);
+
+  await db.machine.create({
+    data: {
+      serial,
+      assetNumber,
+      manufacturer,
+      model,
+      theme,
+      parSheet,
+      sealNumber,
+      bankId: bank.id,
+      seatIndex,
+      history: { create: [{ event: `Added via Machine Records — placed in ${bank.name}, Seat ${seatIndex + 1}` }] },
+    },
+  });
+
+  await logMapChange("Add Machines", bank.name, bank.area.label, `${serial} added, Seat ${seatIndex + 1}`);
+
+  revalidatePath("/compliance/floor");
+  revalidatePath("/compliance/machines");
+  revalidatePath("/compliance/software");
+}
 
 export async function getMachineDrawerDataAction(serial: string) {
   await requireRole("COMPLIANCE");

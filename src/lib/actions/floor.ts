@@ -14,7 +14,7 @@ async function areaForY(y: number) {
   return center < areas[0].y ? areas[0] : areas[areas.length - 1];
 }
 
-async function logMapChange(changeType: string, bankName: string, areaLabel: string, notes: string) {
+export async function logMapChange(changeType: string, bankName: string, areaLabel: string, notes: string) {
   await db.mapChangeLog.create({ data: { changeType, bankName, areaLabel, notes } });
   const count = await db.mapChangeLog.count();
   if (count > 50) {
@@ -129,7 +129,7 @@ export async function changeBankCapacityAction(bankId: string, delta: number) {
   revalidatePath("/compliance/floor");
 }
 
-async function nextBankPosition(areaKey: string) {
+export async function nextBankPosition(areaKey: string) {
   const area = await db.area.findUnique({ where: { key: areaKey } });
   if (!area) throw new Error("Area not found");
   const existing = await db.bank.count({ where: { areaId: area.id } });

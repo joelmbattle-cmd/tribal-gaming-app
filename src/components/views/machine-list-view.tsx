@@ -9,6 +9,7 @@ import { ActionSheet } from "@/components/action-sheet";
 import { MachineDrawerContent } from "@/components/machine-drawer-content";
 import { downloadImportTemplate, exportRowsToExcel, readWorkbookRows } from "@/lib/excel-client";
 import { getMachinesForExportAction, importMachinesAction } from "@/lib/actions/import-export";
+import { createMachineAction } from "@/lib/actions/machines";
 import type { MachineListItem } from "@/lib/data/machines";
 
 const STATUS_LABEL: Record<string, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
@@ -19,7 +20,15 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [, startTransition] = useTransition();
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [serial, setSerial] = useState("");
+  const [assetNumber, setAssetNumber] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
+  const [model, setModel] = useState("");
+  const [theme, setTheme] = useState("");
+  const [parSheet, setParSheet] = useState("");
+  const [sealNumber, setSealNumber] = useState("");
+  const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const showToast = useToast();
   const router = useRouter();
@@ -41,6 +50,42 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
       const rows = await getMachinesForExportAction();
       const ok = exportRowsToExcel(rows, "machine-records");
       showToast(ok ? `Exported ${rows.length} machine record${rows.length === 1 ? "" : "s"} to Excel` : "No machines to export");
+    });
+  };
+
+  const resetCreateForm = () => {
+    setSerial("");
+    setAssetNumber("");
+    setManufacturer("");
+    setModel("");
+    setTheme("");
+    setParSheet("");
+    setSealNumber("");
+  };
+
+  const createMachine = () => {
+    if (!serial.trim() || !assetNumber.trim() || !manufacturer.trim() || !model.trim() || !theme.trim() || !parSheet.trim()) {
+      showToast("Serial, asset number, manufacturer, model, game theme, and PAR sheet are required");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await createMachineAction({
+          serial: serial.trim(),
+          assetNumber: assetNumber.trim(),
+          manufacturer: manufacturer.trim(),
+          model: model.trim(),
+          theme: theme.trim(),
+          parSheet: parSheet.trim(),
+          sealNumber: sealNumber.trim(),
+        });
+        resetCreateForm();
+        setShowCreateForm(false);
+        showToast("Machine added — now on the floor map");
+        router.refresh();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Could not add machine");
+      }
     });
   };
 
@@ -68,6 +113,7 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
   };
 
   const actions = [
+    { icon: "+", label: "New Machine", onClick: () => setShowCreateForm(true) },
     { icon: "📄", label: "Download Template", onClick: downloadImportTemplate },
     { icon: "⭱", label: "Import from Excel", onClick: triggerImport },
     { icon: "⭳", label: "Export to Excel", onClick: doExport },
@@ -84,6 +130,7 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
         </div>
         {variant === "desktop" ? (
           <div className="view-actions">
+            <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Machine</button>
             <button className="btn" onClick={downloadImportTemplate}>📄 Template</button>
             <button className="btn" onClick={triggerImport}>⭱ Import from Excel</button>
             <button className="btn" onClick={doExport}>⭳ Export to Excel</button>
@@ -129,6 +176,110 @@ export function MachineListView({ machines }: { machines: MachineListItem[] }) {
 
       <ResponsiveOverlay open={!!selected} onClose={() => setSelected(null)}>
         {selected && <MachineDrawerContent serial={selected} onClose={() => setSelected(null)} onChanged={() => router.refresh()} />}
+      </ResponsiveOverlay>
+
+      <ResponsiveOverlay open={showCreateForm} onClose={() => setShowCreateForm(false)}>
+        <div className="drawer-head">
+          <div>
+            <div className="drawer-eyebrow">New Machine Record</div>
+            <div className="drawer-title">Add Machine</div>
+          </div>
+          <button className="drawer-close" onClick={() => setShowCreateForm(false)}>✕</button>
+        </div>
+        <div className="drawer-body">
+          <div className="field-label" style={{ marginBottom: 4 }}>
+            Placed on the Interactive Floor Map in the Unassigned bank — move it to a real bank there once seated.
+          </div>
+          <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Machine Master Fields</div>
+          <div className="field-grid">
+            <div>
+              <label className="field-label">Serial Number</label>
+              <input
+                type="text"
+                placeholder="Required — e.g. EGD-10412"
+                value={serial}
+                onChange={(e) => setSerial(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Asset Number</label>
+              <input
+                type="text"
+                placeholder="Required"
+                value={assetNumber}
+                onChange={(e) => setAssetNumber(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Manufacturer</label>
+              <input
+                type="text"
+                placeholder="Required"
+                value={manufacturer}
+                onChange={(e) => setManufacturer(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Model</label>
+              <input
+                type="text"
+                placeholder="Required"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Game Theme</label>
+              <input
+                type="text"
+                placeholder="Required"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">PAR Sheet</label>
+              <input
+                type="text"
+                placeholder="Required"
+                value={parSheet}
+                onChange={(e) => setParSheet(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Seal Number</label>
+              <input
+                type="text"
+                placeholder="Optional — e.g. SL-77291"
+                value={sealNumber}
+                onChange={(e) => setSealNumber(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
+            <button className="btn btn-primary" disabled={pending} onClick={createMachine}>
+              Add Machine
+            </button>
+            <button className="btn" disabled={pending} onClick={() => setShowCreateForm(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       </ResponsiveOverlay>
     </div>
   );
