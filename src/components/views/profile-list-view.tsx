@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { preparePhoto } from "@/lib/image-client";
-import { createPersonAction, uploadPersonPhotoAction, addPersonDocumentAction, deletePersonDocumentAction, archivePersonAction } from "@/lib/actions/people";
+import { createPersonAction, uploadPersonPhotoAction, addPersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
   id: string;
@@ -30,6 +30,11 @@ export type ProfileViewItem = {
   keyFindings?: string | null;
   createdBy?: string | null;
   lastModifiedBy?: string | null;
+  archived: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  restoredAt?: string | null;
+  restoredBy?: string | null;
   documents: { id: string; name: string; date: string | null }[];
   history: { id: string; date: string; event: string }[];
 };
@@ -44,8 +49,10 @@ const APPLICATION_STATUS_OPTIONS = ["Received", "Under Review", "Additional Info
 const BACKGROUND_STATUS_OPTIONS = ["Not Started", "In Review", "Approved", "Denied", "Needs Info"];
 const SUITABILITY_OPTIONS = ["Pending", "Suitable", "Unsuitable"];
 
-export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
+export function ProfileListView({ people, showArchived }: { people: ProfileViewItem[]; showArchived: boolean }) {
   const variant = useShellVariant();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   // Holds the id being confirmed. Cleared whenever the drawer opens or closes
@@ -216,6 +223,27 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
     });
   };
 
+  const unarchive = () => {
+    startTransition(async () => {
+      try {
+        await unarchivePersonAction(selected!);
+        setSelected(null);
+        showToast("Profile restored");
+        router.refresh();
+      } catch {
+        showToast("Failed to restore profile");
+      }
+    });
+  };
+
+  const toggleShowArchived = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (showArchived) params.delete("archived");
+    else params.set("archived", "1");
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  };
+
   return (
     <div>
       <input ref={fileInput} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
@@ -223,20 +251,32 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
 
       <div className="view-head">
         <div>
-          <div className="view-title">Person Profiles</div>
+          <div className="view-title">{showArchived ? "Archived Person Profiles" : "Person Profiles"}</div>
           <div className="view-sub">Click a profile to review documents and background investigation status.</div>
         </div>
-        {variant === "desktop" && (
-          <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Profile</button>
-        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={toggleShowArchived}>
+            {showArchived ? "Show Active" : "Show Archived"}
+          </button>
+          {variant === "desktop" && !showArchived && (
+            <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Profile</button>
+          )}
+        </div>
       </div>
 
       <div className="profiles">
+        {people.length === 0 && (
+          <div className="field-label" style={{ padding: 16 }}>
+            {showArchived ? "No archived profiles." : "No active profiles."}
+          </div>
+        )}
         {people.map((p) => (
           <button key={p.id} className="profile-row" onClick={() => openRecord(p.id)}>
             <div className="avatar">{p.name.split(" ").map((w) => w[0]).join("")}</div>
             <div><div className="p-name">{p.name}</div><div className="p-id">{p.id}</div></div>
-            <div className="p-id">{p.role}</div>
+            <div className="p-id">
+              {showArchived ? `Archived ${p.archivedAt ?? ""} by ${p.archivedBy || "—"}` : p.role}
+            </div>
             <div><span className={`chip ${STATUS_CHIP[p.status] ?? "chip-neutral"}`}>{STATUS_LABEL[p.status] ?? p.status}</span></div>
             <div className="chevron">›</div>
           </button>
@@ -340,7 +380,11 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
                 ))}
               </div>
               <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
-                {confirmingArchive === selected ? (
+                {person.archived ? (
+                  <button className="btn btn-primary" disabled={pending} onClick={unarchive}>
+                    Restore Profile
+                  </button>
+                ) : confirmingArchive === selected ? (
                   <>
                     <div className="field-label">
                       Archiving removes this profile from the active roster. This cannot be undone from the app.
@@ -362,6 +406,8 @@ export function ProfileListView({ people }: { people: ProfileViewItem[] }) {
               <div className="field-grid">
                 <div><div className="field-label">Created By</div><div className="field-value">{person.createdBy || "—"}</div></div>
                 <div><div className="field-label">Last Modified By</div><div className="field-value">{person.lastModifiedBy || "—"}</div></div>
+                <div><div className="field-label">Archived By</div><div className="field-value">{person.archivedBy ? `${person.archivedBy} on ${person.archivedAt}` : "—"}</div></div>
+                <div><div className="field-label">Restored By</div><div className="field-value">{person.restoredBy ? `${person.restoredBy} on ${person.restoredAt}` : "—"}</div></div>
               </div>
             </div>
           </>

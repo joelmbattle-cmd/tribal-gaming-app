@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 
-export async function getExclusionList() {
+export async function getExclusionList(showArchived = false) {
   return db.exclusion.findMany({
-    where: { archived: false },
+    where: { archived: showArchived },
     orderBy: { enrolled: "desc" },
     include: { notes: { orderBy: { date: "asc" } }, documents: { orderBy: { date: "asc" } } },
   });

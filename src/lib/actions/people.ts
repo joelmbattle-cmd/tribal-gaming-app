@@ -117,7 +117,26 @@ export async function archivePersonAction(personId: string) {
   const user = await requireRole("LICENSING");
   await db.person.update({
     where: { id: personId },
-    data: { archived: true, lastModifiedBy: user.name },
+    data: {
+      archived: true,
+      archivedAt: new Date(),
+      archivedBy: user.name,
+      lastModifiedBy: user.name,
+    },
+  });
+  revalidatePath("/licensing/profiles");
+}
+
+export async function unarchivePersonAction(personId: string) {
+  const user = await requireRole("LICENSING");
+  await db.person.update({
+    where: { id: personId },
+    data: {
+      archived: false,
+      restoredAt: new Date(),
+      restoredBy: user.name,
+      lastModifiedBy: user.name,
+    },
   });
   revalidatePath("/licensing/profiles");
 }

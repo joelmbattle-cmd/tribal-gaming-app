@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
 import { preparePhoto } from "@/lib/image-client";
-import { createExclusionAction, uploadExclusionPhotoAction, addExclusionDocumentAction, deleteExclusionDocumentAction, archiveExclusionAction } from "@/lib/actions/exclusions";
+import { createExclusionAction, uploadExclusionPhotoAction, addExclusionDocumentAction, deleteExclusionDocumentAction, archiveExclusionAction, unarchiveExclusionAction } from "@/lib/actions/exclusions";
 
 export type ExclusionViewItem = {
   id: string;
@@ -24,6 +24,11 @@ export type ExclusionViewItem = {
   sourceInitiated?: string | null;
   createdBy?: string | null;
   lastModifiedBy?: string | null;
+  archived: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  restoredAt?: string | null;
+  restoredBy?: string | null;
   documents: { id: string; name: string; date: string }[];
   notes: { id: string; date: string; event: string }[];
 };
@@ -31,8 +36,10 @@ export type ExclusionViewItem = {
 const STATUS_OPTIONS = ["Active", "Expired", "Removed", "Under Review"];
 const EXCLUSION_TYPE_OPTIONS = ["Self-Exclusion", "Involuntary Exclusion", "Other"];
 
-export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewItem[] }) {
+export function ExclusionListView({ exclusions, showArchived }: { exclusions: ExclusionViewItem[]; showArchived: boolean }) {
   const variant = useShellVariant();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   // Holds the id being confirmed. Cleared whenever the drawer opens or closes
@@ -182,6 +189,27 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
     });
   };
 
+  const unarchive = () => {
+    startTransition(async () => {
+      try {
+        await unarchiveExclusionAction(selected!);
+        setSelected(null);
+        showToast("Exclusion restored");
+        router.refresh();
+      } catch {
+        showToast("Failed to restore exclusion");
+      }
+    });
+  };
+
+  const toggleShowArchived = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (showArchived) params.delete("archived");
+    else params.set("archived", "1");
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  };
+
   return (
     <div>
       <input ref={fileInput} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
@@ -189,20 +217,32 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
 
       <div className="view-head">
         <div>
-          <div className="view-title">Self-Exclusion Cases</div>
+          <div className="view-title">{showArchived ? "Archived Self-Exclusion Cases" : "Self-Exclusion Cases"}</div>
           <div className="view-sub">Controlled files. Access and photo evidence are restricted to authorized Compliance staff.</div>
         </div>
-        {variant === "desktop" && (
-          <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Exclusion</button>
-        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={toggleShowArchived}>
+            {showArchived ? "Show Active" : "Show Archived"}
+          </button>
+          {variant === "desktop" && !showArchived && (
+            <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Exclusion</button>
+          )}
+        </div>
       </div>
 
       <div className="profiles">
+        {exclusions.length === 0 && (
+          <div className="field-label" style={{ padding: 16 }}>
+            {showArchived ? "No archived exclusions." : "No active exclusions."}
+          </div>
+        )}
         {exclusions.map((c) => (
           <button key={c.id} className="profile-row" onClick={() => openRecord(c.id)}>
             <div className="avatar-locked">🔒</div>
             <div><div className="p-name">{c.personName || c.id}</div><div className="p-id">{c.id} · {c.term}</div></div>
-            <div className="p-id">Enrolled {c.enrolled}</div>
+            <div className="p-id">
+              {showArchived ? `Archived ${c.archivedAt ?? ""} by ${c.archivedBy || "—"}` : `Enrolled ${c.enrolled}`}
+            </div>
             <div><span className={`chip ${c.status === "Active" ? "chip-flagged" : "chip-neutral"}`}>{c.status}</span></div>
             <div className="chevron">›</div>
           </button>
@@ -285,7 +325,11 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
                 + Attach Document
               </button>
               <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
-                {confirmingArchive === selected ? (
+                {exclusion.archived ? (
+                  <button className="btn btn-primary" disabled={pending} onClick={unarchive}>
+                    Restore Exclusion
+                  </button>
+                ) : confirmingArchive === selected ? (
                   <>
                     <div className="field-label">
                       Archiving removes this case from the active list. This cannot be undone from the app.
@@ -316,6 +360,8 @@ export function ExclusionListView({ exclusions }: { exclusions: ExclusionViewIte
               <div className="field-grid">
                 <div><div className="field-label">Created By</div><div className="field-value">{exclusion.createdBy || "—"}</div></div>
                 <div><div className="field-label">Last Modified By</div><div className="field-value">{exclusion.lastModifiedBy || "—"}</div></div>
+                <div><div className="field-label">Archived By</div><div className="field-value">{exclusion.archivedBy ? `${exclusion.archivedBy} on ${exclusion.archivedAt}` : "—"}</div></div>
+                <div><div className="field-label">Restored By</div><div className="field-value">{exclusion.restoredBy ? `${exclusion.restoredBy} on ${exclusion.restoredAt}` : "—"}</div></div>
               </div>
             </div>
           </>

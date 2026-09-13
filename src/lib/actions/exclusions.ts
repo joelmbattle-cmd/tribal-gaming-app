@@ -97,7 +97,26 @@ export async function archiveExclusionAction(exclusionId: string) {
   const user = await requireRole("COMPLIANCE");
   await db.exclusion.update({
     where: { id: exclusionId },
-    data: { archived: true, lastModifiedBy: user.name },
+    data: {
+      archived: true,
+      archivedAt: new Date(),
+      archivedBy: user.name,
+      lastModifiedBy: user.name,
+    },
+  });
+  revalidatePath("/compliance/exclusions");
+}
+
+export async function unarchiveExclusionAction(exclusionId: string) {
+  const user = await requireRole("COMPLIANCE");
+  await db.exclusion.update({
+    where: { id: exclusionId },
+    data: {
+      archived: false,
+      restoredAt: new Date(),
+      restoredBy: user.name,
+      lastModifiedBy: user.name,
+    },
   });
   revalidatePath("/compliance/exclusions");
 }

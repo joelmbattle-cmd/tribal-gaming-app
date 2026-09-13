@@ -1,10 +1,17 @@
 import { getExclusionList } from "@/lib/data/exclusions";
 import { ExclusionListView } from "@/components/views/exclusion-list-view";
 
-export default async function ExclusionsPage() {
-  const exclusions = await getExclusionList();
+export default async function ExclusionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ archived?: string }>;
+}) {
+  const params = await searchParams;
+  const showArchived = params.archived === "1";
+  const exclusions = await getExclusionList(showArchived);
   return (
     <ExclusionListView
+      showArchived={showArchived}
       exclusions={exclusions.map((c) => ({
         id: c.id,
         status: c.status,
@@ -21,6 +28,11 @@ export default async function ExclusionsPage() {
         sourceInitiated: c.sourceInitiated,
         createdBy: c.createdBy,
         lastModifiedBy: c.lastModifiedBy,
+        archived: c.archived,
+        archivedAt: c.archivedAt ? c.archivedAt.toISOString().slice(0, 10) : null,
+        archivedBy: c.archivedBy,
+        restoredAt: c.restoredAt ? c.restoredAt.toISOString().slice(0, 10) : null,
+        restoredBy: c.restoredBy,
         documents: c.documents.map((d) => ({ id: d.id, name: d.name, date: d.date.toISOString().slice(0, 10) })),
         notes: c.notes.map((n) => ({ id: n.id, date: n.date.toISOString().slice(0, 10), event: n.event })),
       }))}

@@ -211,6 +211,15 @@ model Exclusion {
   archived  Boolean          @default(false)
   createdAt DateTime         @default(now())
 
+  // --- Archive / Restore Audit ---------------------------------------------
+  // Last archive/restore event, independent of the current `archived` value,
+  // so re-archiving after a restore doesn't erase who restored it (or vice
+  // versa).
+  archivedAt DateTime?
+  archivedBy String?
+  restoredAt DateTime?
+  restoredBy String?
+
   // --- Person Identification ---------------------------------------------
   // Nullable at the database level so this migration needs no backfill step;
   // enforced as required by the create form, since a self-exclusion record
@@ -269,6 +278,15 @@ model Person {
   user      User?
   archived  Boolean          @default(false)
   createdAt DateTime         @default(now())
+
+  // --- Archive / Restore Audit ---------------------------------------------
+  // Last archive/restore event, independent of the current `archived` value,
+  // so re-archiving after a restore doesn't erase who restored it (or vice
+  // versa).
+  archivedAt DateTime?
+  archivedBy String?
+  restoredAt DateTime?
+  restoredBy String?
 
   // --- Identification -------------------------------------------------------
   dateOfBirth  DateTime?
