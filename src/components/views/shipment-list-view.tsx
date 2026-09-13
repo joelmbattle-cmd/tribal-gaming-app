@@ -4,34 +4,61 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
-import { sendShipmentNotificationsAction, createShipmentAction, updateShipmentStatusAction, addShipmentDocumentAction, deleteShipmentDocumentAction } from "@/lib/actions/shipments";
+import {
+  sendShipmentNotificationsAction,
+  createShipmentAction,
+  updateShipmentStatusAction,
+  addShipmentDocumentAction,
+  deleteShipmentDocumentAction,
+  linkShipmentMachineAction,
+  unlinkShipmentMachineAction,
+} from "@/lib/actions/shipments";
 import { useShellVariant } from "@/components/shell-variant";
 import { useRef } from "react";
+import { MachineMultiPicker } from "@/components/machine-multi-picker";
+import type { MachineOption } from "@/lib/data/machines";
+
+export type ShipmentMachineItem = {
+  id: string;
+  serial: string;
+  manufacturer: string;
+  model: string;
+  archived: boolean;
+};
 
 export type ShipmentViewItem = {
   id: string;
+  type: string;
+  vendor: string;
   carrier: string;
   received: string;
   status: string;
   documents: { id: string; name: string; date: string }[];
   extracted: { id: string; key: string; value: string }[];
   notify: { id: string; email: string; sent: boolean }[];
+  machines: ShipmentMachineItem[];
 };
 
 const STATUS_CHIP: Record<string, string> = { Closed: "chip-cleared", Processing: "chip-investigation", Open: "chip-neutral" };
+const TYPE_OPTIONS = ["Inbound", "Outbound"] as const;
 
-export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] }) {
+export function ShipmentListView({ shipments, machines }: { shipments: ShipmentViewItem[]; machines: MachineOption[] }) {
   const variant = useShellVariant();
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [type, setType] = useState<(typeof TYPE_OPTIONS)[number]>("Inbound");
+  const [vendor, setVendor] = useState("");
   const [carrier, setCarrier] = useState("");
   const [emails, setEmails] = useState("");
+  const [machineIds, setMachineIds] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const showToast = useToast();
 
   const shipment = shipments.find((s) => s.id === selected);
+  const linkedIds = new Set(shipment?.machines.map((m) => m.id) ?? []);
+  const linkableMachines = machines.filter((m) => !linkedIds.has(m.id));
 
   const send = (id: string) => {
     startTransition(async () => {
@@ -41,9 +68,17 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
     });
   };
 
+  const resetCreateForm = () => {
+    setType("Inbound");
+    setVendor("");
+    setCarrier("");
+    setEmails("");
+    setMachineIds([]);
+  };
+
   const create = () => {
-    if (!carrier.trim()) {
-      showToast("Carrier name is required");
+    if (!vendor.trim() || !carrier.trim()) {
+      showToast("Vendor/Shipper and Carrier are required");
       return;
     }
     const emailList = emails
@@ -53,14 +88,13 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
 
     startTransition(async () => {
       try {
-        await createShipmentAction(carrier, emailList);
-        setCarrier("");
-        setEmails("");
+        await createShipmentAction({ type, vendor: vendor.trim(), carrier: carrier.trim(), notifyEmails: emailList, machineIds });
+        resetCreateForm();
         setShowCreateForm(false);
         showToast("Shipment created");
         router.refresh();
-      } catch {
-        showToast("Failed to create shipment");
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Failed to create shipment");
       }
     });
   };
@@ -107,6 +141,31 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
     });
   };
 
+  const linkMachine = (machineId: string) => {
+    if (!selected) return;
+    startTransition(async () => {
+      try {
+        await linkShipmentMachineAction(selected, machineId);
+        router.refresh();
+      } catch {
+        showToast("Failed to link machine");
+      }
+    });
+  };
+
+  const unlinkMachine = (machineId: string) => {
+    if (!selected) return;
+    startTransition(async () => {
+      try {
+        await unlinkShipmentMachineAction(selected, machineId);
+        showToast("Machine unlinked from shipment");
+        router.refresh();
+      } catch {
+        showToast("Failed to unlink machine");
+      }
+    });
+  };
+
   return (
     <div>
       <div className="view-head">
@@ -123,8 +182,13 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
         {shipments.map((s) => (
           <button key={s.id} className="profile-row" onClick={() => setSelected(s.id)}>
             <div className="avatar mono">{s.id.slice(-2)}</div>
-            <div><div className="p-name">{s.id}</div><div className="p-id">{s.carrier}</div></div>
-            <div className="p-id">Received {s.received}</div>
+            <div><div className="p-name">{s.id}</div><div className="p-id">{s.vendor || "—"} · {s.carrier}</div></div>
+            <div className="p-id">
+              <span className={`chip ${s.type === "Outbound" ? "chip-investigation" : "chip-neutral"}`} style={{ marginRight: 8 }}>
+                {s.type}
+              </span>
+              Received {s.received}
+            </div>
             <div><span className={`chip ${STATUS_CHIP[s.status] ?? "chip-neutral"}`}>{s.status}</span></div>
             <div className="chevron">›</div>
           </button>
@@ -145,12 +209,46 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
               <button className="drawer-close" onClick={() => setSelected(null)}>✕</button>
             </div>
             <div className="drawer-body">
-              <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>AI-Extracted Fields</div>
+              <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Shipment Details</div>
+              <div className="field-grid">
+                <div><div className="field-label">Type</div><div className="field-value">{shipment.type}</div></div>
+                <div><div className="field-label">Vendor / Shipper</div><div className="field-value">{shipment.vendor || "—"}</div></div>
+                <div><div className="field-label">Carrier</div><div className="field-value">{shipment.carrier}</div></div>
+                <div><div className="field-label">Received</div><div className="field-value">{shipment.received}</div></div>
+              </div>
+
+              <div className="section-label">AI-Extracted Fields</div>
               <div className="field-grid">
                 {shipment.extracted.map((f) => (
                   <div key={f.id}><div className="field-label">{f.key}</div><div className="field-value">{f.value}</div></div>
                 ))}
               </div>
+
+              <div className="section-label">Related Machines ({shipment.machines.length})</div>
+              {shipment.machines.map((m) => (
+                <div className="doc-row" key={m.id}>
+                  <span className="doc-icon">▤</span>
+                  <span className="doc-name">{m.serial} — {m.manufacturer} {m.model}{m.archived ? " (Archived)" : ""}</span>
+                  <button
+                    className="doc-delete-btn"
+                    onClick={() => unlinkMachine(m.id)}
+                    disabled={pending}
+                    title="Unlink machine"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <MachineMultiPicker
+                machines={linkableMachines}
+                selectedIds={[]}
+                onChange={(ids) => {
+                  const added = ids[ids.length - 1];
+                  if (added) linkMachine(added);
+                }}
+                disabled={pending}
+              />
+
               <div className="section-label">Shipment Folder ({shipment.documents.length})</div>
               {shipment.documents.map((d) => (
                 <div className="doc-row" key={d.id}>
@@ -202,10 +300,34 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
           <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Shipment Details</div>
           <div className="field-grid">
             <div>
+              <label className="field-label">Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as (typeof TYPE_OPTIONS)[number])}
+                className="field-input"
+                disabled={pending}
+              >
+                {TYPE_OPTIONS.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="field-label">Vendor / Shipper</label>
+              <input
+                type="text"
+                placeholder="Required — e.g., IGT Corporation"
+                value={vendor}
+                onChange={(e) => setVendor(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
               <label className="field-label">Carrier Name</label>
               <input
                 type="text"
-                placeholder="e.g., FedEx, UPS, DHL"
+                placeholder="Required — e.g., FedEx, UPS, DHL"
                 value={carrier}
                 onChange={(e) => setCarrier(e.target.value)}
                 className="field-input"
@@ -224,6 +346,10 @@ export function ShipmentListView({ shipments }: { shipments: ShipmentViewItem[] 
               />
             </div>
           </div>
+
+          <div className="section-label">Related Machines</div>
+          <MachineMultiPicker machines={machines} selectedIds={machineIds} onChange={setMachineIds} disabled={pending} />
+
           <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
             <button className="btn btn-primary" disabled={pending} onClick={create}>
               Create Shipment

@@ -11,20 +11,56 @@ export async function sendShipmentNotificationsAction(shipmentId: string) {
   revalidatePath("/compliance/shipments");
 }
 
-export async function createShipmentAction(carrier: string, notifyEmails: string[]) {
+export type ShipmentIntake = {
+  type: "Inbound" | "Outbound";
+  vendor: string;
+  carrier: string;
+  notifyEmails: string[];
+  machineIds: string[];
+};
+
+export async function createShipmentAction(intake: ShipmentIntake) {
   await requireRole("COMPLIANCE");
+
+  const type = intake.type === "Outbound" ? "Outbound" : "Inbound";
+  const vendor = intake.vendor.trim();
+  const carrier = intake.carrier.trim();
+  if (!vendor || !carrier) throw new Error("Vendor/Shipper and Carrier are required");
+
   const shipment = await db.shipment.create({
     data: {
+      type,
+      vendor,
       carrier,
       received: new Date(),
       status: "Open",
-      notify: {
-        create: notifyEmails.map((email) => ({ email })),
-      },
+      notify: { create: intake.notifyEmails.map((email) => ({ email })) },
+      machines: { create: [...new Set(intake.machineIds)].map((machineId) => ({ machineId })) },
     },
   });
   revalidatePath("/compliance/shipments");
+  revalidatePath("/compliance/machines");
   return shipment;
+}
+
+export async function linkShipmentMachineAction(shipmentId: string, machineId: string) {
+  await requireRole("COMPLIANCE");
+  await db.shipmentMachine.upsert({
+    where: { shipmentId_machineId: { shipmentId, machineId } },
+    update: {},
+    create: { shipmentId, machineId },
+  });
+  revalidatePath("/compliance/shipments");
+  revalidatePath("/compliance/machines");
+}
+
+export async function unlinkShipmentMachineAction(shipmentId: string, machineId: string) {
+  await requireRole("COMPLIANCE");
+  await db.shipmentMachine.delete({
+    where: { shipmentId_machineId: { shipmentId, machineId } },
+  });
+  revalidatePath("/compliance/shipments");
+  revalidatePath("/compliance/machines");
 }
 
 export async function updateShipmentStatusAction(shipmentId: string, status: string) {

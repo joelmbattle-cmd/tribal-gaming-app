@@ -329,6 +329,21 @@ export function MachineDrawerContent({
             </div>
           ))}
         </div>
+
+        <div className="section-label">Related Shipments ({data.shipments.length})</div>
+        {data.shipments.length === 0 ? (
+          <div className="field-value">Not linked to any shipment.</div>
+        ) : (
+          data.shipments.map((s) => (
+            <div className="doc-row" key={s.id}>
+              <span className="doc-icon">▤</span>
+              <span className="doc-name">
+                {s.id} — {s.type} · {s.vendor || "—"} via {s.carrier}
+              </span>
+              <span className="doc-meta">{s.received} · {s.status}</span>
+            </div>
+          ))
+        )}
       </div>
     </>
   );

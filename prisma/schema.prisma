@@ -116,6 +116,7 @@ model Machine {
 
   documents          MachineDocument[]
   history            MachineHistory[]
+  shipments          ShipmentMachine[]
 
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
@@ -171,12 +172,18 @@ model MapChangeLog {
 
 model Shipment {
   id         String               @id @default(cuid())
+  // Nullable-free at the DB level (same tradeoff as Machine.sealNumber): a
+  // default backfills any pre-existing row cleanly, while the create form
+  // enforces both as required going forward.
+  type       String               @default("Inbound") // Inbound / Outbound
+  vendor     String               @default("") // Vendor / Shipper — distinct from the freight carrier below
   carrier    String
   received   DateTime
   status     String // Open / Processing / Closed
   documents  ShipmentDocument[]
   extracted  ShipmentField[]
   notify     ShipmentRecipient[]
+  machines   ShipmentMachine[]
   createdAt  DateTime             @default(now())
 }
 
@@ -204,6 +211,21 @@ model ShipmentRecipient {
   shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   email      String
   sent       Boolean  @default(false)
+}
+
+// Many-to-many: a shipment can carry several machines, and a machine can
+// appear on more than one shipment over its lifetime (e.g. inbound install,
+// later outbound return). Cascades from both sides so deleting either a
+// shipment or a machine record cleans up the link with it.
+model ShipmentMachine {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  machineId  String
+  machine    Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([shipmentId, machineId])
 }
 
 // ---------------------------------------------------------------------------
