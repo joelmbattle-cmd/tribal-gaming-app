@@ -13,11 +13,15 @@ import {
   deleteShipmentDocumentAction,
   linkShipmentMachineAction,
   unlinkShipmentMachineAction,
+  acceptShipmentExtractionAction,
+  dismissShipmentExtractionAction,
 } from "@/lib/actions/shipments";
 import { useShellVariant } from "@/components/shell-variant";
 import { useRef } from "react";
 import { MachineMultiPicker } from "@/components/machine-multi-picker";
 import type { MachineOption } from "@/lib/data/machines";
+import { EXTRACT_FIELD_LABELS } from "@/lib/shipment-field-labels";
+import { buildEmailPreview, buildPermitPreview } from "@/lib/shipment-templates";
 
 export type ShipmentMachineItem = {
   id: string;
@@ -36,12 +40,19 @@ export type ShipmentViewItem = {
   estimatedArrivalDate: string | null;
   status: string;
   documents: { id: string; name: string; date: string }[];
-  extracted: { id: string; key: string; value: string }[];
+  acceptedFields: { id: string; key: string; value: string }[];
+  proposedFields: { id: string; key: string; value: string; confidence: number | null }[];
   notify: { id: string; email: string; sent: boolean }[];
   machines: ShipmentMachineItem[];
 };
 
-const STATUS_CHIP: Record<string, string> = { Closed: "chip-cleared", Processing: "chip-investigation", Open: "chip-neutral" };
+const STATUS_CHIP: Record<string, string> = {
+  Closed: "chip-cleared",
+  "Ready for Notification": "chip-cleared",
+  Processing: "chip-investigation",
+  Open: "chip-neutral",
+};
+const fieldLabel = (key: string) => EXTRACT_FIELD_LABELS[key] ?? key;
 const TYPE_OPTIONS = ["Inbound", "Outbound"] as const;
 type ShipmentType = (typeof TYPE_OPTIONS)[number];
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -72,10 +83,36 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
   const [editEstimatedArrivalDate, setEditEstimatedArrivalDate] = useState("");
   const [editEmails, setEditEmails] = useState("");
 
+  // Review-before-accept edits for proposed fields, keyed by field id and
+  // falling back to the server value when absent. A new upload/accept/
+  // discard swaps in fresh field ids, so stale entries here simply never
+  // match anything — no reset effect needed.
+  const [reviewEdits, setReviewEdits] = useState<Record<string, string>>({});
+
   const shipment = shipments.find((s) => s.id === selected);
   const isClosed = shipment?.status === "Closed";
   const linkedIds = new Set(shipment?.machines.map((m) => m.id) ?? []);
   const linkableMachines = machines.filter((m) => !linkedIds.has(m.id));
+
+  // Pure templates re-derived from the shipment's current accepted state on
+  // every render — accepting a field, editing details, or linking/unlinking
+  // a machine and refreshing is all it takes to regenerate both previews.
+  const templateData = shipment
+    ? {
+        id: shipment.id,
+        type: shipment.type,
+        vendor: shipment.vendor,
+        carrier: shipment.carrier,
+        shippingDate: shipment.shippingDate,
+        estimatedArrivalDate: shipment.estimatedArrivalDate,
+        status: shipment.status,
+        ibolTracking: shipment.acceptedFields.find((f) => f.key === "ibolTracking")?.value ?? null,
+        machines: shipment.machines.map((m) => ({ serial: m.serial, manufacturer: m.manufacturer, model: m.model })),
+        notifyEmails: shipment.notify.map((n) => n.email),
+      }
+    : null;
+  const emailPreview = templateData ? buildEmailPreview(templateData) : null;
+  const permitPreview = templateData ? buildPermitPreview(templateData) : null;
 
   const send = (id: string) => {
     startTransition(async () => {
@@ -179,6 +216,46 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
       setEditing(false);
       showToast("Shipment marked as closed");
       router.refresh();
+    });
+  };
+
+  const markReadyForNotification = (id: string) => {
+    startTransition(async () => {
+      await updateShipmentStatusAction(id, "Ready for Notification");
+      showToast("Marked ready for notification");
+      router.refresh();
+    });
+  };
+
+  const acceptExtraction = () => {
+    if (!shipment) return;
+    const payload = shipment.proposedFields.map((f) => ({
+      id: f.id,
+      key: f.key,
+      value: reviewEdits[f.id] ?? f.value,
+      confidence: f.confidence,
+    }));
+    startTransition(async () => {
+      try {
+        const { linkedMachines } = await acceptShipmentExtractionAction(shipment.id, payload);
+        showToast(linkedMachines > 0 ? `Fields accepted — ${linkedMachines} machine(s) linked` : "Fields accepted");
+        router.refresh();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Failed to accept fields");
+      }
+    });
+  };
+
+  const discardExtraction = () => {
+    if (!shipment) return;
+    startTransition(async () => {
+      try {
+        await dismissShipmentExtractionAction(shipment.id);
+        showToast("Proposed fields discarded");
+        router.refresh();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Failed to discard proposed fields");
+      }
     });
   };
 
@@ -380,10 +457,46 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                 </div>
               )}
 
-              <div className="section-label">AI-Extracted Fields</div>
+              {!isClosed && shipment.proposedFields.length > 0 && (
+                <>
+                  <div className="section-label">Proposed Fields — Pending Review ({shipment.proposedFields.length})</div>
+                  <div className="p-id" style={{ marginBottom: 10 }}>
+                    AI-scrubbed from the most recent upload. Edit any value before accepting — accepting also updates
+                    matching shipment fields and links machines by serial where confidence is high enough.
+                  </div>
+                  <div className="field-grid">
+                    {shipment.proposedFields.map((f) => (
+                      <div key={f.id}>
+                        <label className="field-label">
+                          {fieldLabel(f.key)}
+                          {f.confidence != null && (
+                            <span style={{ textTransform: "none", letterSpacing: 0 }}> · {Math.round(f.confidence * 100)}%</span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          className="field-input"
+                          value={reviewEdits[f.id] ?? f.value}
+                          onChange={(e) => setReviewEdits((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                          disabled={pending}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                    <button className="btn btn-primary" disabled={pending} onClick={acceptExtraction}>Accept Proposed Fields</button>
+                    <button className="btn" disabled={pending} onClick={discardExtraction}>Discard</button>
+                  </div>
+                </>
+              )}
+
+              <div className="section-label">Extracted Fields</div>
               <div className="field-grid">
-                {shipment.extracted.map((f) => (
-                  <div key={f.id}><div className="field-label">{f.key}</div><div className="field-value">{f.value}</div></div>
+                {shipment.acceptedFields.length === 0 && shipment.proposedFields.length === 0 && (
+                  <div className="p-id">No fields extracted yet — attach a document to run the extract pass.</div>
+                )}
+                {shipment.acceptedFields.map((f) => (
+                  <div key={f.id}><div className="field-label">{fieldLabel(f.key)}</div><div className="field-value">{f.value}</div></div>
                 ))}
               </div>
 
@@ -440,10 +553,29 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                   <span className={`notify-status ${n.sent ? "notify-sent" : "notify-unsent"}`}>{n.sent ? "✓ Sent" : "Not sent"}</span>
                 </div>
               ))}
+
+              {emailPreview && permitPreview && (
+                <>
+                  <div className="section-label">Document Previews</div>
+                  <div className="p-id" style={{ marginBottom: 10 }}>
+                    Fixed templates filled from accepted fields — regenerates automatically as shipment fields change. No transport is wired up yet.
+                  </div>
+                  <div className="field-label">Email Notification Preview</div>
+                  <pre className="doc-preview">{emailPreview.body}</pre>
+                  <div className="field-label" style={{ marginTop: 16 }}>Shipping Permit Preview</div>
+                  <pre className="doc-preview">{permitPreview}</pre>
+                </>
+              )}
+
               <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
                 <button className="btn btn-primary" disabled={pending} onClick={() => send(shipment.id)}>
                   Send Prepared Notifications
                 </button>
+                {!isClosed && shipment.status !== "Ready for Notification" && (
+                  <button className="btn" disabled={pending} onClick={() => markReadyForNotification(shipment.id)}>
+                    Mark Ready for Notification
+                  </button>
+                )}
                 {!isClosed && (
                   <button className="btn" disabled={pending} onClick={() => complete(shipment.id)}>
                     Mark as Closed

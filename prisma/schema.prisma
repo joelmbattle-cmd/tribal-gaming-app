@@ -199,13 +199,27 @@ model ShipmentDocument {
   date       DateTime @default(now())
 }
 
-// Simulated AI document scrubbing output — structured key/value pairs.
+// AI document-scrubbing output — structured key/value pairs. A row starts
+// PROPOSED on document upload (editable, not yet trusted) and moves to
+// ACCEPTED once a human reviews and confirms it; only ACCEPTED rows count as
+// the shipment's extracted fields. Defaulting to ACCEPTED keeps pre-existing
+// rows (seeded before this status existed) behaving exactly as before.
+enum ExtractionStatus {
+  PROPOSED
+  ACCEPTED
+}
+
 model ShipmentField {
-  id         String   @id @default(cuid())
+  id         String           @id @default(cuid())
   shipmentId String
-  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipment   Shipment         @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   key        String
   value      String
+  status     ExtractionStatus @default(ACCEPTED)
+  // Simulated OCR/LLM confidence (0–1). Drives whether an accepted field is
+  // also auto-applied to the shipment record / linked machines, vs. staying
+  // informational only for a human to reconcile by hand.
+  confidence Float?
 }
 
 model ShipmentRecipient {
