@@ -17,8 +17,10 @@ export const LICENSING_STATUSES: LicensingStatusDef[] = [
   { key: "READY_TO_REVIEW", label: "Ready to review" },
   { key: "APPROVED", label: "Approved" },
   { key: "TEMPORARY_LICENSE", label: "Temporary license" },
+  { key: "LICENSED_WITH_CONDITIONS", label: "Licensed with conditions" },
   { key: "DENIED", label: "Denied" },
   { key: "WITHDRAWN", label: "Withdrawn" },
+  { key: "SEPARATED", label: "Separated" },
 ];
 
 export function licensingStatusLabel(status: LicensingApplicationStatus | null | undefined): string {
@@ -76,4 +78,14 @@ export function isCriticalPipeline(
 export function isComplianceFlag(documents: { slot: DocumentSlot | null }[]): boolean {
   const fingerprintsWithoutResults = hasSlot(documents, "FINGERPRINTS") && !hasSlot(documents, "NOTICE_OF_RESULTS");
   return fingerprintsWithoutResults || isReadyForIssuance(documents);
+}
+
+/**
+ * "Licensing Actions" — a third smart folder: profiles with at least one
+ * file in the Licensing Actions slot (any licensing action taken against
+ * the licensee). Dual-lists with status folders and the other smart
+ * folders; not a status value itself.
+ */
+export function hasLicensingActions(documents: { slot: DocumentSlot | null }[]): boolean {
+  return hasSlot(documents, "LICENSING_ACTIONS");
 }

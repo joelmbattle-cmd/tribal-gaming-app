@@ -10,7 +10,7 @@ import { PhotoAdjuster } from "@/components/photo-adjuster";
 import { DocumentChecklist, DocumentSlotCard, type ChecklistDocument } from "@/components/document-checklist";
 import { NoObjectionFanout } from "@/components/no-objection-fanout";
 import { BACKGROUND_CHECK_SLOT, type DocumentSlot } from "@/lib/document-slots";
-import { LICENSING_STATUSES, licensingStatusLabel, isCriticalPipeline, isComplianceFlag, type LicensingApplicationStatus } from "@/lib/licensing-status";
+import { LICENSING_STATUSES, licensingStatusLabel, isCriticalPipeline, isComplianceFlag, hasLicensingActions, type LicensingApplicationStatus } from "@/lib/licensing-status";
 import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
@@ -21,6 +21,8 @@ export type ProfileViewItem = {
   photoUrl?: string | null;
   dateOfBirth?: string | null;
   contactInfo?: string | null;
+  position?: string | null;
+  jobDescription?: string | null;
   licenseType?: string | null;
   licenseNumber?: string | null;
   licenseIssueDate?: string | null;
@@ -74,6 +76,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   const [editPersonStatus, setEditPersonStatus] = useState("investigation");
   const [editDateOfBirth, setEditDateOfBirth] = useState("");
   const [editContactInfo, setEditContactInfo] = useState("");
+  const [editPosition, setEditPosition] = useState("");
+  const [editJobDescription, setEditJobDescription] = useState("");
   const [editLicenseType, setEditLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
   const [editLicenseNumber, setEditLicenseNumber] = useState("");
   const [editLicenseIssueDate, setEditLicenseIssueDate] = useState("");
@@ -90,17 +94,22 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   // adjuster, before it's cropped and handed to the upload action.
   const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
   const [showFanout, setShowFanout] = useState(false);
-  // "ALL", "CRITICAL_PIPELINE", and "COMPLIANCE" are folder tabs alongside
-  // the 7 status values — the latter two are computed smart folders (see
-  // isCriticalPipeline / isComplianceFlag), never statuses a profile
-  // actually holds, so a profile can appear in either (or both) and its
-  // status folder at the same time.
-  const [activeFolder, setActiveFolder] = useState<"ALL" | "CRITICAL_PIPELINE" | "COMPLIANCE" | LicensingApplicationStatus>("ALL");
+  // "ALL", "CRITICAL_PIPELINE", "COMPLIANCE", and "LICENSING_ACTIONS" are
+  // folder tabs alongside the status values — the latter three are computed
+  // smart folders (see isCriticalPipeline / isComplianceFlag /
+  // hasLicensingActions), never statuses a profile actually holds, so a
+  // profile can appear in any combination of them and its status folder at
+  // the same time.
+  const [activeFolder, setActiveFolder] = useState<
+    "ALL" | "CRITICAL_PIPELINE" | "COMPLIANCE" | "LICENSING_ACTIONS" | LicensingApplicationStatus
+  >("ALL");
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [personStatus, setPersonStatus] = useState("investigation");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [contactInfo, setContactInfo] = useState("");
+  const [position, setPosition] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
   const [licenseType, setLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
   const [licenseNumber, setLicenseNumber] = useState("");
   const [licenseIssueDate, setLicenseIssueDate] = useState("");
@@ -123,6 +132,7 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     if (activeFolder === "ALL") return true;
     if (activeFolder === "CRITICAL_PIPELINE") return isCriticalPipeline(p.documents, p.applicationStatus);
     if (activeFolder === "COMPLIANCE") return isComplianceFlag(p.documents);
+    if (activeFolder === "LICENSING_ACTIONS") return hasLicensingActions(p.documents);
     return p.applicationStatus === activeFolder;
   });
 
@@ -132,6 +142,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     setPersonStatus("investigation");
     setDateOfBirth("");
     setContactInfo("");
+    setPosition("");
+    setJobDescription("");
     setLicenseType(LICENSE_TYPE_OPTIONS[0]);
     setLicenseNumber("");
     setLicenseIssueDate("");
@@ -159,6 +171,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
           status: personStatus,
           dateOfBirth,
           contactInfo: contactInfo.trim(),
+          position: position.trim(),
+          jobDescription: jobDescription.trim(),
           licenseType,
           licenseNumber: licenseNumber.trim(),
           licenseIssueDate,
@@ -285,6 +299,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     setEditPersonStatus(p.status);
     setEditDateOfBirth(p.dateOfBirth ?? "");
     setEditContactInfo(p.contactInfo ?? "");
+    setEditPosition(p.position ?? "");
+    setEditJobDescription(p.jobDescription ?? "");
     setEditLicenseType(p.licenseType ?? LICENSE_TYPE_OPTIONS[0]);
     setEditLicenseNumber(p.licenseNumber ?? "");
     setEditLicenseIssueDate(p.licenseIssueDate ?? "");
@@ -315,6 +331,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
           status: editPersonStatus,
           dateOfBirth: editDateOfBirth,
           contactInfo: editContactInfo.trim(),
+          position: editPosition.trim(),
+          jobDescription: editJobDescription.trim(),
           licenseType: editLicenseType,
           licenseNumber: editLicenseNumber.trim(),
           licenseIssueDate: editLicenseIssueDate,
@@ -421,6 +439,13 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
           title="Fingerprints on file without Notice of Results, or ready for Issuance"
         >
           ◆ Compliance <span className="folder-tab-count">{people.filter((p) => isComplianceFlag(p.documents)).length}</span>
+        </button>
+        <button
+          className={`folder-tab folder-tab-actions${activeFolder === "LICENSING_ACTIONS" ? " folder-tab-active" : ""}`}
+          onClick={() => setActiveFolder("LICENSING_ACTIONS")}
+          title="Profiles with at least one Licensing Actions file"
+        >
+          ▤ Licensing Actions <span className="folder-tab-count">{people.filter((p) => hasLicensingActions(p.documents)).length}</span>
         </button>
       </div>
 
@@ -553,6 +578,41 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
                   <div><div className="field-label">Contact Info</div><div className="field-value">{person.contactInfo || "—"}</div></div>
                 </div>
               )}
+
+              <div className="section-label">Position &amp; Job Description</div>
+              {isEditing ? (
+                <>
+                  <div className="field-grid">
+                    <div>
+                      <label className="field-label">Position</label>
+                      <input type="text" className="field-input" value={editPosition} onChange={(e) => setEditPosition(e.target.value)} disabled={pending} />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <label className="field-label">Job Description</label>
+                    <textarea className="field-input" rows={3} value={editJobDescription} onChange={(e) => setEditJobDescription(e.target.value)} disabled={pending} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="field-grid">
+                    <div><div className="field-label">Position</div><div className="field-value">{person.position || "—"}</div></div>
+                  </div>
+                  <div className="field-label" style={{ marginTop: 12 }}>Job Description</div>
+                  <div className="field-value">{person.jobDescription || "—"}</div>
+                </>
+              )}
+              {/* Held for the future static forms pass (Suitability determination,
+                  Notice of results, Issuance of license, Denial letter), whose
+                  prefill spec includes name/SSN/DOB/position — not built this pass. */}
+              <button
+                className="btn doc-vendor-order-btn"
+                disabled
+                title="Static forms (Suitability determination, Notice of results, Issuance of license, Denial letter) — planned, not yet built"
+                style={{ marginTop: 12 }}
+              >
+                Generate Forms — Coming Soon
+              </button>
 
               <div className="section-label">License</div>
               {isEditing ? (
@@ -817,6 +877,32 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
                 disabled={pending}
               />
             </div>
+          </div>
+
+          <div className="section-label">Position &amp; Job Description</div>
+          <div className="field-grid">
+            <div>
+              <label className="field-label">Position</label>
+              <input
+                type="text"
+                placeholder="Optional"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className="field-label">Job Description</label>
+            <textarea
+              placeholder="Optional"
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              className="field-input"
+              rows={3}
+              disabled={pending}
+            />
           </div>
 
           <div className="section-label">License</div>

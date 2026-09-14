@@ -17,8 +17,10 @@ export type DocumentSlotDef = {
   requires?: DocumentSlot;
 };
 
-// Fixed 11-slot Licensing document checklist (R6). Order here is display
-// order in the profile drawer and the canonical numbering from the brief.
+// Fixed Licensing document checklist (R6) — the original 11 slots, plus
+// Licensing actions and Separation notice (post-licensure lifecycle events,
+// unrelated to the results chain, so neither carries a `requires`). Order
+// here is display order in the profile drawer.
 export const DOCUMENT_SLOTS: DocumentSlotDef[] = [
   { key: "APPLICATION", label: "Application" },
   { key: "ID_PHOTO", label: "Driver's license / ID photo" },
@@ -31,6 +33,8 @@ export const DOCUMENT_SLOTS: DocumentSlotDef[] = [
   { key: "NO_OBJECTION_LETTER", label: "No-objection / objection letter", critical: true, requires: "NOTICE_OF_RESULTS" },
   { key: "LICENSE_ISSUANCE", label: "Issuance of license", critical: true, requires: "NO_OBJECTION_LETTER" },
   { key: "NIGC_RECEIPT", label: "NIGC receipt" },
+  { key: "LICENSING_ACTIONS", label: "Licensing actions" },
+  { key: "SEPARATION_NOTICE", label: "Separation notice" },
 ];
 
 // Rendered as its own labeled box on the profile drawer, separate from the

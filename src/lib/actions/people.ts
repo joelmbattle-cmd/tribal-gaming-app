@@ -14,6 +14,8 @@ export type PersonIntake = {
   status: string;
   dateOfBirth?: string; // yyyy-mm-dd from a date input
   contactInfo?: string;
+  position?: string;
+  jobDescription?: string;
   licenseType?: string;
   licenseNumber?: string;
   licenseIssueDate?: string;
@@ -41,6 +43,8 @@ export async function createPersonAction(intake: PersonIntake) {
       status: intake.status,
       dateOfBirth: toDateOrNull(intake.dateOfBirth),
       contactInfo: intake.contactInfo || null,
+      position: intake.position || null,
+      jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
       licenseNumber: intake.licenseNumber || null,
       licenseIssueDate: toDateOrNull(intake.licenseIssueDate),
@@ -67,6 +71,8 @@ export type PersonUpdate = {
   status: string;
   dateOfBirth?: string; // yyyy-mm-dd from a date input
   contactInfo?: string;
+  position?: string;
+  jobDescription?: string;
   licenseType?: string;
   licenseNumber?: string;
   licenseIssueDate?: string;
@@ -99,6 +105,8 @@ export async function updatePersonAction(personId: string, intake: PersonUpdate)
       status: intake.status,
       dateOfBirth: toDateOrNull(intake.dateOfBirth),
       contactInfo: intake.contactInfo || null,
+      position: intake.position || null,
+      jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
       licenseNumber: intake.licenseNumber || null,
       licenseIssueDate: toDateOrNull(intake.licenseIssueDate),

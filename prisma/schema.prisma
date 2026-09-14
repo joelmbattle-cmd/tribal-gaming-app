@@ -326,8 +326,10 @@ enum LicensingApplicationStatus {
   READY_TO_REVIEW
   APPROVED
   TEMPORARY_LICENSE
+  LICENSED_WITH_CONDITIONS
   DENIED
   WITHDRAWN
+  SEPARATED
 }
 
 model Person {
@@ -357,6 +359,13 @@ model Person {
   // --- Identification -------------------------------------------------------
   dateOfBirth  DateTime?
   contactInfo  String?   // phone / email / address, combined per the workspace's Contact Info field
+
+  // --- Position & Job Description --------------------------------------------
+  // Held for the future static forms pass (Suitability determination, Notice
+  // of results, Issuance of license, Denial letter), whose prefill spec
+  // includes position alongside name/SSN/DOB — not built this pass.
+  position       String?
+  jobDescription String?
 
   // --- License --------------------------------------------------------------
   licenseType           String?    // Employee / Vendor / Key / Other
@@ -404,6 +413,8 @@ enum DocumentSlot {
   LICENSE_ISSUANCE
   NIGC_RECEIPT
   BACKGROUND_CHECK
+  LICENSING_ACTIONS
+  SEPARATION_NOTICE
 }
 
 model PersonDocument {
