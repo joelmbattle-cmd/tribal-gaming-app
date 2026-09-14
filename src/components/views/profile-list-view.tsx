@@ -10,6 +10,7 @@ import { PhotoAdjuster } from "@/components/photo-adjuster";
 import { DocumentChecklist, DocumentSlotCard, type ChecklistDocument } from "@/components/document-checklist";
 import { NoObjectionFanout } from "@/components/no-objection-fanout";
 import { BACKGROUND_CHECK_SLOT, type DocumentSlot } from "@/lib/document-slots";
+import { LICENSING_STATUSES, licensingStatusLabel, isCriticalDocsIncomplete, type LicensingApplicationStatus } from "@/lib/licensing-status";
 import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
@@ -25,7 +26,7 @@ export type ProfileViewItem = {
   licenseIssueDate?: string | null;
   licenseExpirationDate?: string | null;
   applicationDate?: string | null;
-  applicationStatus?: string | null;
+  applicationStatus?: LicensingApplicationStatus | null;
   backgroundStatus?: string | null;
   suitabilityDetermination?: string | null;
   assignedInvestigator?: string | null;
@@ -49,7 +50,6 @@ const STAMP_CLASS: Record<string, string> = { cleared: "stamp-verified", flagged
 const STAMP_TEXT: Record<string, string> = { cleared: "License Issued", flagged: "Review Required", investigation: "In Progress" };
 
 const LICENSE_TYPE_OPTIONS = ["Employee", "Vendor", "Key", "Other"];
-const APPLICATION_STATUS_OPTIONS = ["Received", "Under Review", "Additional Info Needed", "Accepted", "Rejected", "Closed"];
 const BACKGROUND_STATUS_OPTIONS = ["Not Started", "In Review", "Approved", "Denied", "Needs Info"];
 const SUITABILITY_OPTIONS = ["Pending", "Suitable", "Unsuitable"];
 
@@ -79,7 +79,7 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   const [editLicenseIssueDate, setEditLicenseIssueDate] = useState("");
   const [editLicenseExpirationDate, setEditLicenseExpirationDate] = useState("");
   const [editApplicationDate, setEditApplicationDate] = useState("");
-  const [editApplicationStatus, setEditApplicationStatus] = useState(APPLICATION_STATUS_OPTIONS[0]);
+  const [editApplicationStatus, setEditApplicationStatus] = useState<LicensingApplicationStatus>(LICENSING_STATUSES[0].key);
   const [editBackgroundStatus, setEditBackgroundStatus] = useState(BACKGROUND_STATUS_OPTIONS[0]);
   const [editSuitabilityDetermination, setEditSuitabilityDetermination] = useState(SUITABILITY_OPTIONS[0]);
   const [editAssignedInvestigator, setEditAssignedInvestigator] = useState("");
@@ -90,6 +90,12 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   // adjuster, before it's cropped and handed to the upload action.
   const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
   const [showFanout, setShowFanout] = useState(false);
+  // "ALL" and "CRITICAL_INCOMPLETE" are folder tabs alongside the 7 status
+  // values — CRITICAL_INCOMPLETE is a computed smart folder (missing any of
+  // Notice of Results / No-Objection / Issuance), never a status a profile
+  // actually holds, so a profile can appear in it and its status folder at
+  // the same time.
+  const [activeFolder, setActiveFolder] = useState<"ALL" | "CRITICAL_INCOMPLETE" | LicensingApplicationStatus>("ALL");
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [personStatus, setPersonStatus] = useState("investigation");
@@ -100,7 +106,7 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   const [licenseIssueDate, setLicenseIssueDate] = useState("");
   const [licenseExpirationDate, setLicenseExpirationDate] = useState("");
   const [applicationDate, setApplicationDate] = useState("");
-  const [applicationStatus, setApplicationStatus] = useState(APPLICATION_STATUS_OPTIONS[0]);
+  const [applicationStatus, setApplicationStatus] = useState<LicensingApplicationStatus>(LICENSING_STATUSES[0].key);
   const [backgroundStatus, setBackgroundStatus] = useState(BACKGROUND_STATUS_OPTIONS[0]);
   const [suitabilityDetermination, setSuitabilityDetermination] = useState(SUITABILITY_OPTIONS[0]);
   const [assignedInvestigator, setAssignedInvestigator] = useState("");
@@ -113,6 +119,12 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   const showToast = useToast();
   const person = people.find((p) => p.id === selected);
 
+  const visiblePeople = people.filter((p) => {
+    if (activeFolder === "ALL") return true;
+    if (activeFolder === "CRITICAL_INCOMPLETE") return isCriticalDocsIncomplete(p.documents);
+    return p.applicationStatus === activeFolder;
+  });
+
   const resetForm = () => {
     setName("");
     setRole("");
@@ -124,7 +136,7 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     setLicenseIssueDate("");
     setLicenseExpirationDate("");
     setApplicationDate("");
-    setApplicationStatus(APPLICATION_STATUS_OPTIONS[0]);
+    setApplicationStatus(LICENSING_STATUSES[0].key);
     setBackgroundStatus(BACKGROUND_STATUS_OPTIONS[0]);
     setSuitabilityDetermination(SUITABILITY_OPTIONS[0]);
     setAssignedInvestigator("");
@@ -277,7 +289,7 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     setEditLicenseIssueDate(p.licenseIssueDate ?? "");
     setEditLicenseExpirationDate(p.licenseExpirationDate ?? "");
     setEditApplicationDate(p.applicationDate ?? "");
-    setEditApplicationStatus(p.applicationStatus ?? APPLICATION_STATUS_OPTIONS[0]);
+    setEditApplicationStatus(p.applicationStatus ?? LICENSING_STATUSES[0].key);
     setEditBackgroundStatus(p.backgroundStatus ?? BACKGROUND_STATUS_OPTIONS[0]);
     setEditSuitabilityDetermination(p.suitabilityDetermination ?? SUITABILITY_OPTIONS[0]);
     setEditAssignedInvestigator(p.assignedInvestigator ?? "");
@@ -381,13 +393,40 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
         </div>
       </div>
 
+      <div className="folder-tabs">
+        <button className={`folder-tab${activeFolder === "ALL" ? " folder-tab-active" : ""}`} onClick={() => setActiveFolder("ALL")}>
+          All <span className="folder-tab-count">{people.length}</span>
+        </button>
+        {LICENSING_STATUSES.map((s) => (
+          <button
+            key={s.key}
+            className={`folder-tab${activeFolder === s.key ? " folder-tab-active" : ""}`}
+            onClick={() => setActiveFolder(s.key)}
+          >
+            {s.label} <span className="folder-tab-count">{people.filter((p) => p.applicationStatus === s.key).length}</span>
+          </button>
+        ))}
+        <button
+          className={`folder-tab folder-tab-smart${activeFolder === "CRITICAL_INCOMPLETE" ? " folder-tab-active" : ""}`}
+          onClick={() => setActiveFolder("CRITICAL_INCOMPLETE")}
+          title="Missing Notice of Results, No-Objection, and/or Issuance of License"
+        >
+          ⚠ Critical Docs Incomplete{" "}
+          <span className="folder-tab-count">{people.filter((p) => isCriticalDocsIncomplete(p.documents)).length}</span>
+        </button>
+      </div>
+
       <div className="profiles">
-        {people.length === 0 && (
+        {visiblePeople.length === 0 && (
           <div className="field-label" style={{ padding: 16 }}>
-            {showArchived ? "No archived profiles." : "No active profiles."}
+            {people.length === 0
+              ? showArchived
+                ? "No archived profiles."
+                : "No active profiles."
+              : "No profiles in this folder."}
           </div>
         )}
-        {people.map((p) => (
+        {visiblePeople.map((p) => (
           <button key={p.id} className="profile-row" onClick={() => openRecord(p.id)}>
             {p.photoUrl ? (
               // Plain <img>: the source is either a blob URL or an inline
@@ -548,10 +587,15 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
                     <input type="date" className="field-input" value={editApplicationDate} onChange={(e) => setEditApplicationDate(e.target.value)} disabled={pending} />
                   </div>
                   <div>
-                    <label className="field-label">Application Status</label>
-                    <select className="field-input" value={editApplicationStatus} onChange={(e) => setEditApplicationStatus(e.target.value)} disabled={pending}>
-                      {APPLICATION_STATUS_OPTIONS.map((o) => (
-                        <option key={o} value={o}>{o}</option>
+                    <label className="field-label">Status</label>
+                    <select
+                      className="field-input"
+                      value={editApplicationStatus}
+                      onChange={(e) => setEditApplicationStatus(e.target.value as LicensingApplicationStatus)}
+                      disabled={pending}
+                    >
+                      {LICENSING_STATUSES.map((s) => (
+                        <option key={s.key} value={s.key}>{s.label}</option>
                       ))}
                     </select>
                   </div>
@@ -575,7 +619,7 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
               ) : (
                 <div className="field-grid">
                   <div><div className="field-label">Application Date</div><div className="field-value">{person.applicationDate || "—"}</div></div>
-                  <div><div className="field-label">Application Status</div><div className="field-value">{person.applicationStatus || "—"}</div></div>
+                  <div><div className="field-label">Status</div><div className="field-value">{licensingStatusLabel(person.applicationStatus)}</div></div>
                   <div><div className="field-label">Background Status</div><div className="field-value">{person.backgroundStatus || "—"}</div></div>
                   <div><div className="field-label">Suitability Determination</div><div className="field-value">{person.suitabilityDetermination || "—"}</div></div>
                 </div>
@@ -828,15 +872,15 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
               />
             </div>
             <div>
-              <label className="field-label">Application Status</label>
+              <label className="field-label">Status</label>
               <select
                 value={applicationStatus}
-                onChange={(e) => setApplicationStatus(e.target.value)}
+                onChange={(e) => setApplicationStatus(e.target.value as LicensingApplicationStatus)}
                 className="field-input"
                 disabled={pending}
               >
-                {APPLICATION_STATUS_OPTIONS.map((o) => (
-                  <option key={o} value={o}>{o}</option>
+                {LICENSING_STATUSES.map((s) => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
                 ))}
               </select>
             </div>

@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth-guard";
 import { uploadDocument } from "@/lib/blob";
 import { storePhoto } from "@/lib/photo";
 import { lockedReason, type DocumentSlot } from "@/lib/document-slots";
+import type { LicensingApplicationStatus } from "@/lib/licensing-status";
 import { revalidatePath } from "next/cache";
 
 export type PersonIntake = {
@@ -18,7 +19,7 @@ export type PersonIntake = {
   licenseIssueDate?: string;
   licenseExpirationDate?: string;
   applicationDate?: string;
-  applicationStatus?: string;
+  applicationStatus?: LicensingApplicationStatus;
   backgroundStatus?: string;
   suitabilityDetermination?: string;
   assignedInvestigator?: string;
@@ -71,7 +72,7 @@ export type PersonUpdate = {
   licenseIssueDate?: string;
   licenseExpirationDate?: string;
   applicationDate?: string;
-  applicationStatus?: string;
+  applicationStatus?: LicensingApplicationStatus;
   backgroundStatus?: string;
   suitabilityDetermination?: string;
   assignedInvestigator?: string;

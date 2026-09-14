@@ -369,6 +369,19 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
 .map-search { flex: 1 1 220px; max-width: 320px; min-width: 180px; }
 .map-search-input { padding: 8px 12px; font-size: 12px; }
 
+/* ---------- Licensing status folders ---------- */
+.folder-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.folder-tab {
+  font-family: var(--font-plex-mono); font-size: 11px; letter-spacing: 0.02em; white-space: nowrap;
+  background: var(--panel-light); border: 1px solid var(--hairline-strong); color: var(--parchment-dim);
+  border-radius: 20px; padding: 6px 12px; transition: all .15s ease;
+}
+.folder-tab:hover { color: var(--parchment); border-color: var(--seal-dim); }
+.folder-tab-active { background: rgba(200, 155, 60, 0.15); border-color: var(--seal); color: var(--seal); font-weight: 600; }
+.folder-tab-count { opacity: 0.7; }
+.folder-tab-smart { border-style: dashed; }
+.folder-tab-smart.folder-tab-active { background: rgba(193, 84, 74, 0.15); border-color: var(--alert); color: var(--alert); }
+
 /* ---------- Lists (profiles / shipments / software / exclusions) ---------- */
 .profiles { display: flex; flex-direction: column; border-top: 1px solid var(--hairline); }
 .profile-row {

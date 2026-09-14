@@ -316,6 +316,20 @@ model ExclusionNote {
 // Licensing (R6) / Applicant Portal (R9)
 // ---------------------------------------------------------------------------
 
+// Drives the Licensing list's status folders/tabs. "Critical docs incomplete"
+// is a separate, computed smart folder (profiles missing Notice of Results,
+// No-Objection, and/or Issuance) — deliberately not a value here, since a
+// profile's status and its document completeness are independent facts.
+enum LicensingApplicationStatus {
+  APPLICATION_NOT_FINISHED
+  APPLICATION_TURNED_IN
+  READY_TO_REVIEW
+  APPROVED
+  TEMPORARY_LICENSE
+  DENIED
+  WITHDRAWN
+}
+
 model Person {
   id        String           @id @default(cuid())
   // Already serves as the workspace's "Full Legal Name" field — the seeded
@@ -352,7 +366,7 @@ model Person {
 
   // --- Application & Status ---------------------------------------------------
   applicationDate           DateTime?
-  applicationStatus         String?   // Received / Under Review / Additional Info Needed / Accepted / Rejected / Closed
+  applicationStatus         LicensingApplicationStatus?
   backgroundStatus          String?   // Not Started / In Review / Approved / Denied / Needs Info
   suitabilityDetermination  String?   // Pending / Suitable / Unsuitable
 
