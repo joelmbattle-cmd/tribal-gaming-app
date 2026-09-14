@@ -9,19 +9,13 @@ import { preparePhoto } from "@/lib/image-client";
 import { PhotoAdjuster } from "@/components/photo-adjuster";
 import { DocumentChecklist, DocumentSlotCard, type ChecklistDocument } from "@/components/document-checklist";
 import { NoObjectionFanout } from "@/components/no-objection-fanout";
+import { NigcPacketBuilder } from "@/components/nigc-packet-builder";
 import { BACKGROUND_CHECK_SLOT, lockedReason, type DocumentSlot } from "@/lib/document-slots";
 import { LICENSING_STATUSES, licensingStatusLabel, isCriticalPipeline, isComplianceFlag, hasLicensingActions, type LicensingApplicationStatus } from "@/lib/licensing-status";
 import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction, generatePersonFormAction } from "@/lib/actions/people";
 import { EXPIRY_STATUS_CHIP, EXPIRY_STATUS_LABEL, licenseExpiryStatus } from "@/lib/license-expiry";
 import { FORM_TYPES, FORM_LABEL, FORM_SLOT, type FormType } from "@/lib/licensing-forms";
-
-function openHtmlPreview(html: string) {
-  const win = window.open("", "_blank");
-  if (!win) return;
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-}
+import { openHtmlPreview } from "@/lib/print-preview";
 
 export type ProfileViewItem = {
   id: string;
@@ -120,6 +114,7 @@ export function ProfileListView({
   // adjuster, before it's cropped and handed to the upload action.
   const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
   const [showFanout, setShowFanout] = useState(false);
+  const [showNigcPacket, setShowNigcPacket] = useState(false);
   // "ALL", "CRITICAL_PIPELINE", "COMPLIANCE", and "LICENSING_ACTIONS" are
   // folder tabs alongside the status values — the latter three are computed
   // smart folders (see isCriticalPipeline / isComplianceFlag /
@@ -452,6 +447,7 @@ export function ProfileListView({
           {variant === "desktop" && !showArchived && (
             <>
               <button className="btn" onClick={() => setShowFanout(true)}>Send No-Objection Letter</button>
+              <button className="btn" onClick={() => setShowNigcPacket(true)}>Generate NIGC Packet</button>
               <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Profile</button>
             </>
           )}
@@ -1150,6 +1146,7 @@ export function ProfileListView({
       )}
 
       <NoObjectionFanout open={showFanout} onClose={() => setShowFanout(false)} people={people} />
+      <NigcPacketBuilder open={showNigcPacket} onClose={() => setShowNigcPacket(false)} people={people} />
     </div>
   );
 }
