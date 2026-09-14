@@ -13,6 +13,8 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
   ],
   LICENSING: [
     { href: "/licensing/profiles", label: "Person Profiles", icon: "◍" },
+    { href: "/licensing/vendors", label: "Vendor Licensing", icon: "◈" },
+    { href: "/licensing/applications", label: "Applications", icon: "▥" },
     { href: "/metrics", label: "Metrics & Reporting", icon: "▲" },
   ],
   APPLICANT: [{ href: "/applicant", label: "My Application", icon: "◍" }],

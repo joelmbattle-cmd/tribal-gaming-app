@@ -54,10 +54,10 @@ model Area {
   // persisted (not derived) so the layout survives across demo sessions —
   // see Data Model Gap Analysis: "purely a UI/display convenience layered
   // on top of Area / Bank" is the resolution taken here, but persisted.
-  y       Int
-  h       Int
-  order   Int    @default(0)
-  banks   Bank[]
+  y     Int
+  h     Int
+  order Int    @default(0)
+  banks Bank[]
 }
 
 model Bank {
@@ -96,43 +96,43 @@ enum HighlightFlag {
 }
 
 model Machine {
-  id                 String            @id @default(cuid())
-  serial             String            @unique // e.g. EGD-10412
-  assetNumber        String
-  manufacturer       String
-  model              String
-  theme              String
-  parSheet           String
-  sealNumber         String            @default("")
-  complianceStatus   ComplianceStatus  @default(PENDING)
-  lifecycleStatus    LifecycleStatus   @default(ACTIVE)
-  highlightFlag      HighlightFlag     @default(NONE)
-  softwareStatus     String            @default("Compliant") // Compliant / Needs Update / Conditionally Revoked / Revoked
-  statusSince        DateTime          @default(now())
+  id               String           @id @default(cuid())
+  serial           String           @unique // e.g. EGD-10412
+  assetNumber      String
+  manufacturer     String
+  model            String
+  theme            String
+  parSheet         String
+  sealNumber       String           @default("")
+  complianceStatus ComplianceStatus @default(PENDING)
+  lifecycleStatus  LifecycleStatus  @default(ACTIVE)
+  highlightFlag    HighlightFlag    @default(NONE)
+  softwareStatus   String           @default("Compliant") // Compliant / Needs Update / Conditionally Revoked / Revoked
+  statusSince      DateTime         @default(now())
 
-  bankId             String?
-  bank               Bank?             @relation(fields: [bankId], references: [id])
-  seatIndex          Int?
+  bankId    String?
+  bank      Bank?   @relation(fields: [bankId], references: [id])
+  seatIndex Int?
 
-  documents          MachineDocument[]
-  history            MachineHistory[]
-  shipments          ShipmentMachine[]
+  documents MachineDocument[]
+  history   MachineHistory[]
+  shipments ShipmentMachine[]
 
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // --- Archive / Restore ---------------------------------------------------
   // Archiving clears bankId/seatIndex (same shape as removing from a seat) so
   // the machine drops off the floor map and active list for free; priorBankId
   // is a plain id (no relation) so restore can still fall back to Unassigned
   // if that bank was deleted while archived, without a broken FK in between.
-  archived           Boolean           @default(false)
-  archivedAt         DateTime?
-  archivedBy         String?
-  restoredAt         DateTime?
-  restoredBy         String?
-  priorBankId        String?
-  priorSeatIndex     Int?
+  archived       Boolean   @default(false)
+  archivedAt     DateTime?
+  archivedBy     String?
+  restoredAt     DateTime?
+  restoredBy     String?
+  priorBankId    String?
+  priorSeatIndex Int?
 
   @@unique([bankId, seatIndex])
 }
@@ -171,23 +171,23 @@ model MapChangeLog {
 // ---------------------------------------------------------------------------
 
 model Shipment {
-  id         String               @id @default(cuid())
+  id                   String              @id @default(cuid())
   // Nullable-free at the DB level (same tradeoff as Machine.sealNumber): a
   // default backfills any pre-existing row cleanly, while the create form
   // enforces both as required going forward.
-  type       String               @default("Inbound") // Inbound / Outbound
-  vendor     String               @default("") // Vendor / Shipper — distinct from the freight carrier below
-  carrier    String
+  type                 String              @default("Inbound") // Inbound / Outbound
+  vendor               String              @default("") // Vendor / Shipper — distinct from the freight carrier below
+  carrier              String
   // Renamed at the Prisma layer only — the DB column stays "received" via
   // @map so this needs no backfill/rename migration, just a field rename.
-  shippingDate         DateTime   @map("received")
+  shippingDate         DateTime            @map("received")
   estimatedArrivalDate DateTime?
-  status     String // Open / Processing / Closed
-  documents  ShipmentDocument[]
-  extracted  ShipmentField[]
-  notify     ShipmentRecipient[]
-  machines   ShipmentMachine[]
-  createdAt  DateTime             @default(now())
+  status               String // Open / Processing / Closed
+  documents            ShipmentDocument[]
+  extracted            ShipmentField[]
+  notify               ShipmentRecipient[]
+  machines             ShipmentMachine[]
+  createdAt            DateTime            @default(now())
 }
 
 model ShipmentDocument {
@@ -250,7 +250,7 @@ model ShipmentMachine {
 // ---------------------------------------------------------------------------
 
 model Exclusion {
-  id        String           @id @default(cuid())
+  id        String              @id @default(cuid())
   // Collapses the workspace's two parallel status fields (Status,
   // Exclusion Status) into one, per the field-expansion task's own note.
   // Active / Expired / Removed / Under Review
@@ -260,8 +260,8 @@ model Exclusion {
   photoUrl  String?
   documents ExclusionDocument[]
   notes     ExclusionNote[]
-  archived  Boolean          @default(false)
-  createdAt DateTime         @default(now())
+  archived  Boolean             @default(false)
+  createdAt DateTime            @default(now())
 
   // --- Archive / Restore Audit ---------------------------------------------
   // Last archive/restore event, independent of the current `archived` value,
@@ -276,23 +276,23 @@ model Exclusion {
   // Nullable at the database level so this migration needs no backfill step;
   // enforced as required by the create form, since a self-exclusion record
   // that cannot name who it excludes cannot do its job.
-  personName    String?
-  aliases       String?
-  dateOfBirth   DateTime?
-  governmentId  String?   // "Government / Tribal ID"
+  personName   String?
+  aliases      String?
+  dateOfBirth  DateTime?
+  governmentId String? // "Government / Tribal ID"
 
   // --- Exclusion Details ---------------------------------------------------
-  exclusionType    String?    // Self-Exclusion / Involuntary Exclusion / Other
-  expirationDate   DateTime?
-  restrictions     String?    // "Restrictions / Terms"
-  sourceInitiated  String?    // "Source / How Initiated"
+  exclusionType   String? // Self-Exclusion / Involuntary Exclusion / Other
+  expirationDate  DateTime?
+  restrictions    String? // "Restrictions / Terms"
+  sourceInitiated String? // "Source / How Initiated"
 
   // --- System & Audit -------------------------------------------------------
   // Stamped from the acting user's session name rather than a User relation,
   // so the record preserves who acted even if that account is later removed.
   createdBy      String?
   lastModifiedBy String?
-  updatedAt      DateTime  @updatedAt
+  updatedAt      DateTime @updatedAt
 }
 
 model ExclusionDocument {
@@ -322,14 +322,23 @@ model Person {
   // records store full names, and there is no separate short-label use of
   // this field elsewhere, so no rename was needed to close that gap.
   name      String
-  role      String           // e.g. "Applicant — Key Employee", "Vendor — Gaming Equipment"
-  status    String           // cleared / flagged / investigation
+  role      String // e.g. "Applicant — Key Employee", "Vendor — Gaming Equipment"
+  status    String // cleared / flagged / investigation
   photoUrl  String?
   documents PersonDocument[]
   history   PersonHistory[]
   user      User?
   archived  Boolean          @default(false)
   createdAt DateTime         @default(now())
+
+  // --- Vendor Licensing ------------------------------------------------------
+  // Set when this profile is a principal of a vendor company (Vendor
+  // Licensing module); null for a standalone/individual licensee.
+  vendorCompanyId String?
+  vendorCompany   VendorCompany? @relation(fields: [vendorCompanyId], references: [id])
+
+  // The Application this profile was created from via Accept, if any.
+  application Application?
 
   // --- Archive / Restore Audit ---------------------------------------------
   // Last archive/restore event, independent of the current `archived` value,
@@ -341,20 +350,20 @@ model Person {
   restoredBy String?
 
   // --- Identification -------------------------------------------------------
-  dateOfBirth  DateTime?
-  contactInfo  String?   // phone / email / address, combined per the workspace's Contact Info field
+  dateOfBirth DateTime?
+  contactInfo String? // phone / email / address, combined per the workspace's Contact Info field
 
   // --- License --------------------------------------------------------------
-  licenseType           String?    // Employee / Vendor / Key / Other
+  licenseType           String? // Employee / Vendor / Key / Other
   licenseNumber         String?
   licenseIssueDate      DateTime?
   licenseExpirationDate DateTime?
 
   // --- Application & Status ---------------------------------------------------
-  applicationDate           DateTime?
-  applicationStatus         String?   // Received / Under Review / Additional Info Needed / Accepted / Rejected / Closed
-  backgroundStatus          String?   // Not Started / In Review / Approved / Denied / Needs Info
-  suitabilityDetermination  String?   // Pending / Suitable / Unsuitable
+  applicationDate          DateTime?
+  applicationStatus        String? // Received / Under Review / Additional Info Needed / Accepted / Rejected / Closed
+  backgroundStatus         String? // Not Started / In Review / Approved / Denied / Needs Info
+  suitabilityDetermination String? // Pending / Suitable / Unsuitable
 
   // --- Investigation Tracking ------------------------------------------------
   // Free text rather than a User relation: there is no investigator
@@ -367,7 +376,7 @@ model Person {
   // --- System & Audit ----------------------------------------------------------
   createdBy      String?
   lastModifiedBy String?
-  updatedAt      DateTime  @updatedAt
+  updatedAt      DateTime @updatedAt
 }
 
 model PersonDocument {
@@ -386,4 +395,91 @@ model PersonHistory {
   person   Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
   date     DateTime @default(now())
   event    String
+}
+
+// ---------------------------------------------------------------------------
+// Vendor Licensing — vendor companies and their principals (Licensing side)
+// ---------------------------------------------------------------------------
+// A VendorCompany is the licensed entity; its principals are ordinary Person
+// profiles (Person.vendorCompanyId) so a principal's profile is exactly the
+// same shape — same fields, same checklist pattern — as any other licensee.
+
+model VendorCompany {
+  id          String  @id @default(cuid())
+  name        String
+  status      String // cleared / flagged / investigation — same vocabulary as Person.status
+  contactInfo String?
+  address     String?
+
+  licenseType           String?
+  licenseNumber         String?
+  licenseIssueDate      DateTime?
+  licenseExpirationDate DateTime?
+
+  principals   Person[]
+  applications Application[]
+
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  archivedBy String?
+  restoredAt DateTime?
+  restoredBy String?
+
+  createdBy      String?
+  lastModifiedBy String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Applications — invite-to-accept pipeline that feeds Person on Accept
+// ---------------------------------------------------------------------------
+// Mirrors the Person intake shape field-for-field so Accept can copy every
+// field across as-is ("ALL application fields prefilled") with no mapping.
+
+model Application {
+  id       String @id @default(cuid())
+  progress String // Invited / In Progress / Submitted / Accepted / Rejected
+
+  name        String
+  email       String
+  role        String
+  dateOfBirth DateTime?
+  contactInfo String?
+
+  licenseType           String?
+  licenseNumber         String?
+  licenseIssueDate      DateTime?
+  licenseExpirationDate DateTime?
+
+  applicationDate          DateTime?
+  applicationStatus        String?
+  backgroundStatus         String?
+  suitabilityDetermination String?
+
+  assignedInvestigator        String?
+  investigationStartDate      DateTime?
+  investigationCompletionDate DateTime?
+  keyFindings                 String?
+
+  // Set when this application is for a principal of a vendor company —
+  // surfaces it as a "needs application" / pending entry on that company's
+  // Vendor Licensing detail page until Accepted.
+  vendorCompanyId String?
+  vendorCompany   VendorCompany? @relation(fields: [vendorCompanyId], references: [id])
+
+  // Set on Accept, once the Person profile is created from this application.
+  personId String? @unique
+  person   Person? @relation(fields: [personId], references: [id])
+
+  invitedBy   String?
+  invitedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  acceptedAt  DateTime?
+  acceptedBy  String?
+  rejectedAt  DateTime?
+  rejectedBy  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
