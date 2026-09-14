@@ -285,34 +285,41 @@ body.map-fullscreen .m-map-wrap { margin: 0; }
 .map-log-area, .map-log-notes { color: var(--parchment-dim); font-size: 10.5px; }
 .map-log-date { color: var(--parchment-dim); font-size: 10.5px; text-align: right; }
 
+/* Right-hand thumb column: zoom cluster stacked above the mode toggle,
+   both offset from the edge by the device's safe-area inset (not just a
+   flat 16px) so they never sit under a notch/rounded corner in landscape. */
 .m-fab-cluster {
-  position: fixed; right: 16px; bottom: calc(var(--tabbar-h) + var(--safe-b) + 76px); z-index: 30;
+  position: fixed; right: calc(16px + var(--safe-r)); bottom: calc(var(--tabbar-h) + var(--safe-b) + 82px); z-index: 30;
   display: flex; flex-direction: column; align-items: center; background: var(--panel); border: 1px solid var(--hairline-strong);
   border-radius: 24px; overflow: hidden; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
-body.map-fullscreen .m-fab-cluster { bottom: calc(var(--safe-b) + 76px); }
+body.map-fullscreen .m-fab-cluster { bottom: calc(var(--safe-b) + 82px); }
 .m-fab { width: 46px; height: 46px; background: none; border: none; color: var(--parchment); font-size: 19px; }
 .m-fab-zoom-label { font-size: 9px; color: var(--parchment-dim); padding: 2px 0; }
 .m-fab-edit, .m-fab-more {
-  position: fixed; right: 16px; width: 50px; height: 50px; border-radius: 50%; background: var(--seal); color: var(--ink);
+  position: fixed; width: 50px; height: 50px; border-radius: 50%; background: var(--seal); color: var(--ink);
   font-size: 18px; border: none; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); z-index: 30;
 }
-.m-fab-edit { bottom: calc(var(--tabbar-h) + var(--safe-b) + 16px); }
+.m-fab-edit { right: calc(16px + var(--safe-r)); bottom: calc(var(--tabbar-h) + var(--safe-b) + 16px); }
 .m-fab-edit.active { background: var(--panel-lighter); color: var(--seal); border: 1.5px solid var(--seal); }
-.m-fab-more { left: 16px; right: auto; bottom: calc(var(--tabbar-h) + var(--safe-b) + 16px); background: var(--panel-lighter); color: var(--parchment); border: 1px solid var(--hairline-strong); }
+.m-fab-more { left: calc(16px + var(--safe-l)); bottom: calc(var(--tabbar-h) + var(--safe-b) + 16px); background: var(--panel-lighter); color: var(--parchment); border: 1px solid var(--hairline-strong); }
 body.map-fullscreen .m-fab-edit, body.map-fullscreen .m-fab-more { bottom: calc(var(--safe-b) + 16px); }
 .m-tap-hint {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--tabbar-h) + var(--safe-b) + 78px);
   background: var(--seal); color: var(--ink); font-family: var(--font-plex-mono); font-size: 11px; padding: 8px 14px;
   border-radius: 20px; z-index: 31; white-space: nowrap; font-weight: 600;
+  max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis;
 }
+/* Left column, stacked directly above "more" — deliberately NOT in the
+   right-hand column: with editMode active, that column already holds the
+   zoom cluster at this same height, and both are visible at once. */
 .m-fab-add {
-  position: fixed; right: 16px; width: 44px; height: 44px; border-radius: 50%; background: var(--panel-lighter);
+  position: fixed; left: calc(16px + var(--safe-l)); width: 46px; height: 46px; border-radius: 50%; background: var(--panel-lighter);
   color: var(--parchment); font-size: 18px; border: 1px solid var(--hairline-strong);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); z-index: 30; bottom: calc(var(--tabbar-h) + var(--safe-b) + 76px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); z-index: 30; bottom: calc(var(--tabbar-h) + var(--safe-b) + 82px);
 }
 .m-fab-add.active { background: var(--seal); color: var(--ink); border-color: var(--seal); }
-body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
+body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 82px); }
 .m-map-below { margin-top: 16px; }
 
 .map-hint { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -709,6 +716,7 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
   .drawer { width: 100vw; max-width: 100vw; }
   .bank-popover { width: calc(100vw - 32px); max-width: 280px; }
   .map-search { max-width: 100%; flex-basis: 100%; }
+  .map-search-input { padding: 11px 12px; min-height: 44px; }
 
   .search-input { font-size: 16px; } /* Prevent zoom on iOS focus */
   .profile-row { grid-template-columns: 34px 1fr auto; gap: 8px; row-gap: 4px; }
@@ -723,11 +731,18 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
 @media (max-width: 480px) {
   .view-title { font-size: 16px; }
   .machine, .empty-slot { width: 48px; height: 48px; font-size: 10px; }
+  .machine .m-id { font-size: 10.5px; } /* .machine .m-id's own base rule otherwise wins over the line above at any width */
   .status-toggle { flex-direction: column; }
 }
 
 @media (hover: none) and (pointer: coarse) {
-  .bank-drag-handle { padding: 8px 10px; font-size: 18px; }
+  /* Bump the smallest edit-mode controls toward Apple's ~44pt touch-target
+     guideline. Desktop keeps the tighter mouse-oriented sizing above —
+     these only apply on a touch/coarse pointer, where a near-miss tap is
+     the difference between "moved the bank" and "opened the wrong menu". */
+  .bank-drag-handle { padding: 8px 10px; font-size: 18px; min-width: 44px; min-height: 44px; }
+  .zone-expand-btn { min-height: 38px; padding: 8px 12px; }
+  .capacity-stepper button { width: 34px; height: 34px; }
   .machine, .empty-slot, .btn, .status-btn, .zone-expand-btn { touch-action: manipulation; }
   .map-viewport, .m-map-viewport { touch-action: none; }
 }
