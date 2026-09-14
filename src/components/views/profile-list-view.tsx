@@ -10,7 +10,7 @@ import { PhotoAdjuster } from "@/components/photo-adjuster";
 import { DocumentChecklist, DocumentSlotCard, type ChecklistDocument } from "@/components/document-checklist";
 import { NoObjectionFanout } from "@/components/no-objection-fanout";
 import { BACKGROUND_CHECK_SLOT, type DocumentSlot } from "@/lib/document-slots";
-import { LICENSING_STATUSES, licensingStatusLabel, isCriticalDocsIncomplete, type LicensingApplicationStatus } from "@/lib/licensing-status";
+import { LICENSING_STATUSES, licensingStatusLabel, isCriticalPipeline, isComplianceFlag, type LicensingApplicationStatus } from "@/lib/licensing-status";
 import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
@@ -90,12 +90,12 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   // adjuster, before it's cropped and handed to the upload action.
   const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
   const [showFanout, setShowFanout] = useState(false);
-  // "ALL" and "CRITICAL_INCOMPLETE" are folder tabs alongside the 7 status
-  // values — CRITICAL_INCOMPLETE is a computed smart folder (missing any of
-  // Notice of Results / No-Objection / Issuance), never a status a profile
-  // actually holds, so a profile can appear in it and its status folder at
-  // the same time.
-  const [activeFolder, setActiveFolder] = useState<"ALL" | "CRITICAL_INCOMPLETE" | LicensingApplicationStatus>("ALL");
+  // "ALL", "CRITICAL_PIPELINE", and "COMPLIANCE" are folder tabs alongside
+  // the 7 status values — the latter two are computed smart folders (see
+  // isCriticalPipeline / isComplianceFlag), never statuses a profile
+  // actually holds, so a profile can appear in either (or both) and its
+  // status folder at the same time.
+  const [activeFolder, setActiveFolder] = useState<"ALL" | "CRITICAL_PIPELINE" | "COMPLIANCE" | LicensingApplicationStatus>("ALL");
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [personStatus, setPersonStatus] = useState("investigation");
@@ -121,7 +121,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
 
   const visiblePeople = people.filter((p) => {
     if (activeFolder === "ALL") return true;
-    if (activeFolder === "CRITICAL_INCOMPLETE") return isCriticalDocsIncomplete(p.documents);
+    if (activeFolder === "CRITICAL_PIPELINE") return isCriticalPipeline(p.documents, p.applicationStatus);
+    if (activeFolder === "COMPLIANCE") return isComplianceFlag(p.documents);
     return p.applicationStatus === activeFolder;
   });
 
@@ -407,12 +408,19 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
           </button>
         ))}
         <button
-          className={`folder-tab folder-tab-smart${activeFolder === "CRITICAL_INCOMPLETE" ? " folder-tab-active" : ""}`}
-          onClick={() => setActiveFolder("CRITICAL_INCOMPLETE")}
-          title="Missing Notice of Results, No-Objection, and/or Issuance of License"
+          className={`folder-tab folder-tab-smart${activeFolder === "CRITICAL_PIPELINE" ? " folder-tab-active" : ""}`}
+          onClick={() => setActiveFolder("CRITICAL_PIPELINE")}
+          title="No-Objection done but NIGC receipt missing, Approved but awaiting No-Objection, or ready for Issuance"
         >
-          ⚠ Critical Docs Incomplete{" "}
-          <span className="folder-tab-count">{people.filter((p) => isCriticalDocsIncomplete(p.documents)).length}</span>
+          ⚠ Critical Pipeline{" "}
+          <span className="folder-tab-count">{people.filter((p) => isCriticalPipeline(p.documents, p.applicationStatus)).length}</span>
+        </button>
+        <button
+          className={`folder-tab folder-tab-compliance${activeFolder === "COMPLIANCE" ? " folder-tab-active" : ""}`}
+          onClick={() => setActiveFolder("COMPLIANCE")}
+          title="Fingerprints on file without Notice of Results, or ready for Issuance"
+        >
+          ◆ Compliance <span className="folder-tab-count">{people.filter((p) => isComplianceFlag(p.documents)).length}</span>
         </button>
       </div>
 

@@ -253,8 +253,9 @@ async function main() {
       keyFindings: "Reference checks in progress; no adverse findings to date.",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
-      // Mid-investigation: through Notice of Results, awaiting the
-      // No-Objection letter (a fan-out candidate — see attachNoObjectionLetterAction).
+      // Through Notice of Results and the No-Objection letter — ready for
+      // Issuance, matching the "Critical Pipeline" smart folder's rule 3
+      // (see isCriticalPipeline).
       documents: {
         create: [
           { name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-07-01") },
@@ -267,6 +268,7 @@ async function main() {
           { name: "Investigative Report.pdf", slot: "INVESTIGATIVE_REPORT", date: new Date("2026-08-01") },
           { name: "Suitability Determination Report.pdf", slot: "SUITABILITY_REPORT", date: new Date("2026-08-10") },
           { name: "Notice of Results.pdf", slot: "NOTICE_OF_RESULTS", date: new Date("2026-08-12") },
+          { name: "No-Objection Letter — NIGC.pdf", slot: "NO_OBJECTION_LETTER", date: new Date("2026-08-20") },
         ],
       },
       history: {
@@ -274,6 +276,7 @@ async function main() {
           { date: new Date("2026-07-01"), event: "Application submitted" },
           { date: new Date("2026-07-08"), event: "Background investigation opened" },
           { date: new Date("2026-08-12"), event: "Reference checks in progress" },
+          { date: new Date("2026-08-20"), event: "No-Objection letter received from NIGC" },
         ],
       },
     },

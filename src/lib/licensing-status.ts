@@ -8,10 +8,9 @@ export type LicensingStatusDef = {
   label: string;
 };
 
-// The Licensing list's status picker and folder tabs. "Critical docs
-// incomplete" is NOT one of these — it's a separate, computed smart folder
-// (see isCriticalDocsIncomplete below) based on document completeness, not
-// a value a profile's status can actually hold.
+// The Licensing list's status picker and folder tabs. "Critical Pipeline" is
+// NOT one of these — it's a separate, computed smart folder (see
+// isCriticalPipeline below), not a value a profile's status can actually hold.
 export const LICENSING_STATUSES: LicensingStatusDef[] = [
   { key: "APPLICATION_NOT_FINISHED", label: "Application not finished" },
   { key: "APPLICATION_TURNED_IN", label: "Application turned in" },
@@ -27,14 +26,54 @@ export function licensingStatusLabel(status: LicensingApplicationStatus | null |
 }
 
 /**
- * The three document slots that gate the results chain (see
- * src/lib/document-slots.ts). A profile is "critical docs incomplete" when
- * any of these three is still missing at least one file — independent of
- * the profile's status, so a profile can (and often will) show up in both
- * its status folder and this smart folder at the same time.
+ * "Critical Pipeline" — profiles sitting at a specific stall point in the
+ * results chain (Notice of Results -> No-Objection -> Issuance) rather than
+ * simply "missing any of the three." A profile matches when ANY of:
+ *
+ *  1. No-Objection is on file but the NIGC receipt isn't — the letter is
+ *     done but sending it to NIGC hasn't been confirmed yet.
+ *  2. Status is Approved and Notice of Results is on file but No-Objection
+ *     isn't — approved and results are in, but the letter hasn't gone out.
+ *  3. Notice of Results and No-Objection are both on file but Issuance
+ *     isn't — everything upstream is done, only issuing the license is left.
+ *
+ * Independent of the profile's status folder (rule 2 aside, which reads
+ * status but doesn't require the profile currently be viewed under it), so
+ * a profile can show up here and in its status folder at the same time.
  */
-const CRITICAL_RESULT_SLOTS: DocumentSlot[] = ["NOTICE_OF_RESULTS", "NO_OBJECTION_LETTER", "LICENSE_ISSUANCE"];
+function hasSlot(documents: { slot: DocumentSlot | null }[], slot: DocumentSlot): boolean {
+  return documents.some((d) => d.slot === slot);
+}
 
-export function isCriticalDocsIncomplete(documents: { slot: DocumentSlot | null }[]): boolean {
-  return CRITICAL_RESULT_SLOTS.some((slot) => !documents.some((d) => d.slot === slot));
+/** Shared by both smart folders below: Notice of Results and No-Objection are both on file, but Issuance isn't yet. */
+function isReadyForIssuance(documents: { slot: DocumentSlot | null }[]): boolean {
+  return hasSlot(documents, "NOTICE_OF_RESULTS") && hasSlot(documents, "NO_OBJECTION_LETTER") && !hasSlot(documents, "LICENSE_ISSUANCE");
+}
+
+export function isCriticalPipeline(
+  documents: { slot: DocumentSlot | null }[],
+  applicationStatus: LicensingApplicationStatus | null | undefined,
+): boolean {
+  const hasNoticeOfResults = hasSlot(documents, "NOTICE_OF_RESULTS");
+  const hasNoObjection = hasSlot(documents, "NO_OBJECTION_LETTER");
+  const hasNigcReceipt = hasSlot(documents, "NIGC_RECEIPT");
+
+  const noObjectionDoneNotConfirmedSent = hasNoObjection && !hasNigcReceipt;
+  const approvedAwaitingNoObjection = applicationStatus === "APPROVED" && hasNoticeOfResults && !hasNoObjection;
+
+  return noObjectionDoneNotConfirmedSent || approvedAwaitingNoObjection || isReadyForIssuance(documents);
+}
+
+/**
+ * "Compliance" — a second, separate smart folder (dual-lists with status
+ * folders and with Critical Pipeline). A profile matches when ANY of:
+ *
+ *  1. Fingerprints are on file but Notice of Results isn't — fingerprints
+ *     submitted without a matching result yet on record.
+ *  2. Ready for Issuance (see isReadyForIssuance) — everything upstream of
+ *     the license record is done.
+ */
+export function isComplianceFlag(documents: { slot: DocumentSlot | null }[]): boolean {
+  const fingerprintsWithoutResults = hasSlot(documents, "FINGERPRINTS") && !hasSlot(documents, "NOTICE_OF_RESULTS");
+  return fingerprintsWithoutResults || isReadyForIssuance(documents);
 }

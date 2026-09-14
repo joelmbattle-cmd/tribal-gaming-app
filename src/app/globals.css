@@ -381,6 +381,8 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
 .folder-tab-count { opacity: 0.7; }
 .folder-tab-smart { border-style: dashed; }
 .folder-tab-smart.folder-tab-active { background: rgba(193, 84, 74, 0.15); border-color: var(--alert); color: var(--alert); }
+.folder-tab-compliance { border-style: dashed; }
+.folder-tab-compliance.folder-tab-active { background: rgba(142, 163, 201, 0.15); border-color: var(--pending); color: var(--pending); }
 
 /* ---------- Lists (profiles / shipments / software / exclusions) ---------- */
 .profiles { display: flex; flex-direction: column; border-top: 1px solid var(--hairline); }
