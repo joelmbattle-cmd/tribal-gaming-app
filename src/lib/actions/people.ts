@@ -5,8 +5,9 @@ import { requireRole } from "@/lib/auth-guard";
 import { uploadDocument } from "@/lib/blob";
 import { storePhoto } from "@/lib/photo";
 import { lockedReason, type DocumentSlot } from "@/lib/document-slots";
-import type { LicensingApplicationStatus } from "@/lib/licensing-status";
+import { licensingStatusLabel, type LicensingApplicationStatus } from "@/lib/licensing-status";
 import { resolveLicenseExpiration, addYears, DEFAULT_LICENSE_TERM_YEARS } from "@/lib/license-expiry";
+import { buildForm, FORM_SLOT, FORM_LABEL, type FormType } from "@/lib/licensing-forms";
 import { revalidatePath } from "next/cache";
 
 export type PersonIntake = {
@@ -15,6 +16,7 @@ export type PersonIntake = {
   status: string;
   dateOfBirth?: string; // yyyy-mm-dd from a date input
   contactInfo?: string;
+  ssn?: string;
   position?: string;
   jobDescription?: string;
   licenseType?: string;
@@ -50,6 +52,7 @@ export async function createPersonAction(intake: PersonIntake) {
       status: intake.status,
       dateOfBirth: toDateOrNull(intake.dateOfBirth),
       contactInfo: intake.contactInfo || null,
+      ssn: intake.ssn || null,
       position: intake.position || null,
       jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
@@ -83,6 +86,7 @@ export type PersonUpdate = {
   status: string;
   dateOfBirth?: string; // yyyy-mm-dd from a date input
   contactInfo?: string;
+  ssn?: string;
   position?: string;
   jobDescription?: string;
   licenseType?: string;
@@ -120,6 +124,7 @@ export async function updatePersonAction(personId: string, intake: PersonUpdate)
       status: intake.status,
       dateOfBirth: toDateOrNull(intake.dateOfBirth),
       contactInfo: intake.contactInfo || null,
+      ssn: intake.ssn || null,
       position: intake.position || null,
       jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
@@ -224,6 +229,93 @@ export async function addPersonDocumentAction(personId: string, slot: DocumentSl
 
   revalidatePath("/licensing/profiles");
   return { id: doc.id, storage: upload.status };
+}
+
+/**
+ * Static forms pass: renders a fixed HTML template from the profile's own
+ * fields (no freeform AI) and files the result into the matching checklist
+ * slot, same as a manual upload would. Returns the rendered HTML so the
+ * caller can open it for preview/print immediately, independent of whether
+ * blob storage is configured.
+ */
+export async function generatePersonFormAction(personId: string, formType: FormType) {
+  const user = await requireRole("LICENSING");
+
+  const person = await db.person.findUnique({
+    where: { id: personId },
+    select: {
+      id: true,
+      name: true,
+      position: true,
+      ssn: true,
+      dateOfBirth: true,
+      licenseType: true,
+      licenseNumber: true,
+      licenseIssueDate: true,
+      licenseExpirationDate: true,
+      suitabilityDetermination: true,
+      applicationStatus: true,
+      keyFindings: true,
+      archived: true,
+      documents: { select: { slot: true } },
+    },
+  });
+  if (!person) throw new Error("Person not found");
+  // Same view-only guard as every other document action, and the results
+  // chain still applies — generating the Issuance form is no more allowed
+  // to skip No-Objection than a manual upload would be.
+  if (person.archived) throw new Error("Cannot generate forms for an archived profile");
+  const slot = FORM_SLOT[formType];
+  const blocked = lockedReason(slot, person.documents);
+  if (blocked) throw new Error(blocked);
+
+  const html = buildForm(formType, {
+    id: person.id,
+    name: person.name,
+    position: person.position,
+    ssn: person.ssn,
+    dateOfBirth: person.dateOfBirth ? person.dateOfBirth.toISOString().slice(0, 10) : null,
+    licenseType: person.licenseType,
+    licenseNumber: person.licenseNumber,
+    licenseIssueDate: person.licenseIssueDate ? person.licenseIssueDate.toISOString().slice(0, 10) : null,
+    licenseExpirationDate: person.licenseExpirationDate ? person.licenseExpirationDate.toISOString().slice(0, 10) : null,
+    suitabilityDeterminationLabel: person.suitabilityDetermination || "—",
+    applicationStatusLabel: licensingStatusLabel(person.applicationStatus),
+    keyFindings: person.keyFindings,
+  });
+
+  const fileName = `${FORM_LABEL[formType]}.html`;
+  const file = new File([html], fileName, { type: "text/html" });
+  const upload = await uploadDocument(file, `people/${personId}/${slot.toLowerCase()}`);
+  const uploadDate = new Date();
+
+  // Generating the Issuance of License form is "issuance completed" just
+  // like manually filing that slot — same +2-year default as
+  // addPersonDocumentAction, only filling in what's still missing.
+  const isFirstIssuanceDoc = slot === "LICENSE_ISSUANCE" && !person.documents.some((d) => d.slot === "LICENSE_ISSUANCE");
+  const resolvedIssueDate = person.licenseIssueDate ?? uploadDate;
+  const licenseIssueDate = isFirstIssuanceDoc ? resolvedIssueDate : undefined;
+  const licenseExpirationDate =
+    isFirstIssuanceDoc && !person.licenseExpirationDate ? addYears(resolvedIssueDate, DEFAULT_LICENSE_TERM_YEARS) : undefined;
+
+  const [doc] = await db.$transaction([
+    db.personDocument.create({
+      data: {
+        personId,
+        slot,
+        name: fileName,
+        blobUrl: upload.status === "uploaded" ? upload.url : null,
+        date: uploadDate,
+      },
+    }),
+    db.person.update({
+      where: { id: personId },
+      data: { lastModifiedBy: user.name, licenseIssueDate, licenseExpirationDate },
+    }),
+  ]);
+
+  revalidatePath("/licensing/profiles");
+  return { id: doc.id, html, storage: upload.status };
 }
 
 /**

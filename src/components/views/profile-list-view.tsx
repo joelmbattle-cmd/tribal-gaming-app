@@ -9,10 +9,19 @@ import { preparePhoto } from "@/lib/image-client";
 import { PhotoAdjuster } from "@/components/photo-adjuster";
 import { DocumentChecklist, DocumentSlotCard, type ChecklistDocument } from "@/components/document-checklist";
 import { NoObjectionFanout } from "@/components/no-objection-fanout";
-import { BACKGROUND_CHECK_SLOT, type DocumentSlot } from "@/lib/document-slots";
+import { BACKGROUND_CHECK_SLOT, lockedReason, type DocumentSlot } from "@/lib/document-slots";
 import { LICENSING_STATUSES, licensingStatusLabel, isCriticalPipeline, isComplianceFlag, hasLicensingActions, type LicensingApplicationStatus } from "@/lib/licensing-status";
-import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
+import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction, generatePersonFormAction } from "@/lib/actions/people";
 import { EXPIRY_STATUS_CHIP, EXPIRY_STATUS_LABEL, licenseExpiryStatus } from "@/lib/license-expiry";
+import { FORM_TYPES, FORM_LABEL, FORM_SLOT, type FormType } from "@/lib/licensing-forms";
+
+function openHtmlPreview(html: string) {
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
 
 export type ProfileViewItem = {
   id: string;
@@ -22,6 +31,7 @@ export type ProfileViewItem = {
   photoUrl?: string | null;
   dateOfBirth?: string | null;
   contactInfo?: string | null;
+  ssn?: string | null;
   position?: string | null;
   jobDescription?: string | null;
   licenseType?: string | null;
@@ -91,6 +101,7 @@ export function ProfileListView({
   const [editPersonStatus, setEditPersonStatus] = useState("investigation");
   const [editDateOfBirth, setEditDateOfBirth] = useState("");
   const [editContactInfo, setEditContactInfo] = useState("");
+  const [editSsn, setEditSsn] = useState("");
   const [editPosition, setEditPosition] = useState("");
   const [editJobDescription, setEditJobDescription] = useState("");
   const [editLicenseType, setEditLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
@@ -123,6 +134,7 @@ export function ProfileListView({
   const [personStatus, setPersonStatus] = useState("investigation");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [contactInfo, setContactInfo] = useState("");
+  const [ssn, setSsn] = useState("");
   const [position, setPosition] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [licenseType, setLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
@@ -157,6 +169,7 @@ export function ProfileListView({
     setPersonStatus("investigation");
     setDateOfBirth("");
     setContactInfo("");
+    setSsn("");
     setPosition("");
     setJobDescription("");
     setLicenseType(LICENSE_TYPE_OPTIONS[0]);
@@ -186,6 +199,7 @@ export function ProfileListView({
           status: personStatus,
           dateOfBirth,
           contactInfo: contactInfo.trim(),
+          ssn: ssn.trim(),
           position: position.trim(),
           jobDescription: jobDescription.trim(),
           licenseType,
@@ -297,6 +311,20 @@ export function ProfileListView({
     });
   };
 
+  const generateForm = (formType: FormType) => {
+    if (!selected) return;
+    startTransition(async () => {
+      try {
+        const { html } = await generatePersonFormAction(selected, formType);
+        openHtmlPreview(html);
+        showToast(`${FORM_LABEL[formType]} generated and filed`);
+        router.refresh();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Failed to generate form");
+      }
+    });
+  };
+
   const openRecord = (id: string) => {
     setConfirmingArchive(null);
     setEditingId(null);
@@ -315,6 +343,7 @@ export function ProfileListView({
     setEditPersonStatus(p.status);
     setEditDateOfBirth(p.dateOfBirth ?? "");
     setEditContactInfo(p.contactInfo ?? "");
+    setEditSsn(p.ssn ?? "");
     setEditPosition(p.position ?? "");
     setEditJobDescription(p.jobDescription ?? "");
     setEditLicenseType(p.licenseType ?? LICENSE_TYPE_OPTIONS[0]);
@@ -347,6 +376,7 @@ export function ProfileListView({
           status: editPersonStatus,
           dateOfBirth: editDateOfBirth,
           contactInfo: editContactInfo.trim(),
+          ssn: editSsn.trim(),
           position: editPosition.trim(),
           jobDescription: editJobDescription.trim(),
           licenseType: editLicenseType,
@@ -584,6 +614,10 @@ export function ProfileListView({
                     <label className="field-label">Contact Info</label>
                     <input type="text" className="field-input" value={editContactInfo} onChange={(e) => setEditContactInfo(e.target.value)} disabled={pending} />
                   </div>
+                  <div>
+                    <label className="field-label">Social Security Number</label>
+                    <input type="text" className="field-input" placeholder="XXX-XX-XXXX" value={editSsn} onChange={(e) => setEditSsn(e.target.value)} disabled={pending} />
+                  </div>
                   <div><div className="field-label">Profile ID</div><div className="field-value">{person.id}</div></div>
                 </div>
               ) : (
@@ -592,6 +626,7 @@ export function ProfileListView({
                   <div><div className="field-label">Category</div><div className="field-value" style={{ fontFamily: "var(--font-plex-sans)", fontSize: 12.5 }}>{person.role}</div></div>
                   <div><div className="field-label">Date of Birth</div><div className="field-value">{person.dateOfBirth || "—"}</div></div>
                   <div><div className="field-label">Contact Info</div><div className="field-value">{person.contactInfo || "—"}</div></div>
+                  <div><div className="field-label">Social Security Number</div><div className="field-value">{person.ssn || "—"}</div></div>
                 </div>
               )}
 
@@ -618,17 +653,27 @@ export function ProfileListView({
                   <div className="field-value">{person.jobDescription || "—"}</div>
                 </>
               )}
-              {/* Held for the future static forms pass (Suitability determination,
-                  Notice of results, Issuance of license, Denial letter), whose
-                  prefill spec includes name/SSN/DOB/position — not built this pass. */}
-              <button
-                className="btn doc-vendor-order-btn"
-                disabled
-                title="Static forms (Suitability determination, Notice of results, Issuance of license, Denial letter) — planned, not yet built"
-                style={{ marginTop: 12 }}
-              >
-                Generate Forms — Coming Soon
-              </button>
+              {!person.archived && (
+                <div style={{ marginTop: 12 }}>
+                  <div className="field-label" style={{ marginBottom: 6 }}>Generate Forms</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {FORM_TYPES.map((formType) => {
+                      const locked = lockedReason(FORM_SLOT[formType], person.documents);
+                      return (
+                        <button
+                          key={formType}
+                          className="btn btn-small"
+                          disabled={pending || !!locked}
+                          title={locked ? `🔒 ${locked}` : `Preview/print the ${FORM_LABEL[formType]} letter, prefilled from this profile`}
+                          onClick={() => generateForm(formType)}
+                        >
+                          {FORM_LABEL[formType]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="section-label">License</div>
               {isEditing ? (
@@ -899,6 +944,17 @@ export function ProfileListView({
                 placeholder="Phone / email / address"
                 value={contactInfo}
                 onChange={(e) => setContactInfo(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+            <div>
+              <label className="field-label">Social Security Number</label>
+              <input
+                type="text"
+                placeholder="XXX-XX-XXXX"
+                value={ssn}
+                onChange={(e) => setSsn(e.target.value)}
                 className="field-input"
                 disabled={pending}
               />

@@ -368,11 +368,14 @@ model Person {
   // --- Identification -------------------------------------------------------
   dateOfBirth DateTime?
   contactInfo String? // phone / email / address, combined per the workspace's Contact Info field
+  // Prefill field for the static forms pass (Suitability determination,
+  // Notice of results, Issuance of license, Denial letter) — stored as
+  // entered (e.g. "XXX-XX-1234") rather than parsed/validated, since this
+  // is a fixed-template prefill value, not a field the app itself computes.
+  ssn         String?
 
   // --- Position & Job Description --------------------------------------------
-  // Held for the future static forms pass (Suitability determination, Notice
-  // of results, Issuance of license, Denial letter), whose prefill spec
-  // includes position alongside name/SSN/DOB — not built this pass.
+  // Prefill field for the same static forms pass — see ssn above.
   position       String?
   jobDescription String?
 
@@ -420,6 +423,7 @@ enum DocumentSlot {
   NOTICE_OF_RESULTS
   NO_OBJECTION_LETTER
   LICENSE_ISSUANCE
+  DENIAL_LETTER
   NIGC_RECEIPT
   BACKGROUND_CHECK
   LICENSING_ACTIONS
