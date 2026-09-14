@@ -253,12 +253,19 @@ async function main() {
       keyFindings: "Reference checks in progress; no adverse findings to date.",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
+      // Mid-investigation: through Notice of Results, awaiting the
+      // No-Objection letter (a fan-out candidate — see attachNoObjectionLetterAction).
       documents: {
         create: [
-          { name: "Application Form.pdf", date: new Date("2026-07-01"), submitted: true },
-          { name: "Background Consent.pdf", date: new Date("2026-07-01"), submitted: true },
-          { name: "Employment History.pdf", date: new Date("2026-07-05"), submitted: true },
-          { name: "Fingerprint Card", date: null, submitted: false },
+          { name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-07-01") },
+          { name: "Driver's License.pdf", slot: "ID_PHOTO", date: new Date("2026-07-01") },
+          { name: "Social Security Card.pdf", slot: "SSN_CARD", date: new Date("2026-07-01") },
+          { name: "Criminal History — State Repository.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-07-10") },
+          { name: "Criminal History — FBI.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-07-12") },
+          { name: "Fingerprint Card.pdf", slot: "FINGERPRINTS", date: new Date("2026-07-08") },
+          { name: "Investigative Report.pdf", slot: "INVESTIGATIVE_REPORT", date: new Date("2026-08-01") },
+          { name: "Suitability Determination Report.pdf", slot: "SUITABILITY_REPORT", date: new Date("2026-08-10") },
+          { name: "Notice of Results.pdf", slot: "NOTICE_OF_RESULTS", date: new Date("2026-08-12") },
         ],
       },
       history: {
@@ -293,11 +300,21 @@ async function main() {
       keyFindings: "No disqualifying history found. Cleared for licensure.",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
+      // Fully complete: every checklist slot on file through NIGC receipt.
       documents: {
         create: [
-          { name: "Application Form.pdf", date: new Date("2026-05-14"), submitted: true },
-          { name: "Background Consent.pdf", date: new Date("2026-05-14"), submitted: true },
-          { name: "Investigation Summary.pdf", date: new Date("2026-06-30"), submitted: true },
+          { name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-05-14") },
+          { name: "Driver's License.pdf", slot: "ID_PHOTO", date: new Date("2026-05-14") },
+          { name: "Social Security Card.pdf", slot: "SSN_CARD", date: new Date("2026-05-14") },
+          { name: "Criminal History — State Repository.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-05-22") },
+          { name: "Criminal History — FBI.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-05-24") },
+          { name: "Fingerprint Card.pdf", slot: "FINGERPRINTS", date: new Date("2026-05-20") },
+          { name: "Investigative Report.pdf", slot: "INVESTIGATIVE_REPORT", date: new Date("2026-06-10") },
+          { name: "Suitability Determination Report.pdf", slot: "SUITABILITY_REPORT", date: new Date("2026-06-20") },
+          { name: "Notice of Results.pdf", slot: "NOTICE_OF_RESULTS", date: new Date("2026-06-25") },
+          { name: "No-Objection Letter — NIGC.pdf", slot: "NO_OBJECTION_LETTER", date: new Date("2026-06-28") },
+          { name: "License Issuance Certificate.pdf", slot: "LICENSE_ISSUANCE", date: new Date("2026-06-30") },
+          { name: "NIGC Receipt.pdf", slot: "NIGC_RECEIPT", date: new Date("2026-07-05") },
         ],
       },
       history: {
@@ -328,10 +345,16 @@ async function main() {
       keyFindings: "Discrepancy flagged — prior license action in another jurisdiction. Awaiting explanation from applicant.",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
+      // Stalled pending the discrepancy explanation — hasn't reached Notice of
+      // Results yet, so No-Objection stays locked (and this profile shows as
+      // ineligible in the fan-out selector).
       documents: {
         create: [
-          { name: "Application Form.pdf", date: new Date("2026-08-02"), submitted: true },
-          { name: "Vendor Disclosure.pdf", date: new Date("2026-08-02"), submitted: true },
+          { name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-08-02") },
+          { name: "Driver's License.pdf", slot: "ID_PHOTO", date: new Date("2026-08-02") },
+          { name: "Criminal History — State Repository.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-08-16") },
+          { name: "Criminal History — Prior Jurisdiction.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-08-18") },
+          { name: "Fingerprint Card.pdf", slot: "FINGERPRINTS", date: new Date("2026-08-15") },
         ],
       },
       history: {
@@ -357,11 +380,10 @@ async function main() {
       suitabilityDetermination: "Pending",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
+      // Just received — only the application is on file, so the entire
+      // results chain (and the No-Objection fan-out) stays locked.
       documents: {
-        create: [
-          { name: "Application Form.pdf", date: new Date("2026-08-10"), submitted: true },
-          { name: "Background Consent.pdf", date: new Date("2026-08-10"), submitted: true },
-        ],
+        create: [{ name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-08-10") }],
       },
       history: {
         create: [

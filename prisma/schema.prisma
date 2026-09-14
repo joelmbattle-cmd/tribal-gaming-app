@@ -370,14 +370,32 @@ model Person {
   updatedAt      DateTime  @updatedAt
 }
 
+// Fixed 11-slot Licensing document checklist (R6). Nullable so the field
+// doesn't force a backfill and an Applicant Portal submission with no
+// Licensing-assigned category still has somewhere to live.
+enum DocumentSlot {
+  APPLICATION
+  ID_PHOTO
+  SSN_CARD
+  CRIMINAL_HISTORY
+  FINGERPRINTS
+  INVESTIGATIVE_REPORT
+  SUITABILITY_REPORT
+  NOTICE_OF_RESULTS
+  NO_OBJECTION_LETTER
+  LICENSE_ISSUANCE
+  NIGC_RECEIPT
+}
+
 model PersonDocument {
-  id        String    @id @default(cuid())
+  id        String        @id @default(cuid())
   personId  String
-  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person    Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
   name      String
+  slot      DocumentSlot?
   blobUrl   String?
   date      DateTime?
-  submitted Boolean   @default(true)
+  submitted Boolean       @default(true)
 }
 
 model PersonHistory {

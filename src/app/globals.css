@@ -501,6 +501,51 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
 }
 .doc-delete-btn:hover { color: var(--alert); }
 .doc-delete-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.doc-replace-btn {
+  background: none; border: none; color: var(--parchment-dim); cursor: pointer; padding: 4px 6px;
+  font-size: 14px; transition: color .15s ease; flex-shrink: 0;
+}
+.doc-replace-btn:hover { color: var(--seal); }
+.doc-replace-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ---------- Licensing document checklist (11 fixed slots) ---------- */
+.doc-checklist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+.doc-slot {
+  border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--panel-light);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.doc-slot-complete { border-color: rgba(111, 154, 99, 0.4); }
+.doc-slot-locked { opacity: 0.72; }
+.doc-slot-header { display: flex; align-items: center; gap: 8px; }
+.doc-slot-label { font-size: 12.5px; font-weight: 600; flex: 1; }
+.doc-slot-critical-badge {
+  font-family: var(--font-plex-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--seal); border: 1px solid rgba(200, 155, 60, 0.4); background: rgba(200, 155, 60, 0.12);
+  border-radius: 20px; padding: 2px 7px; flex-shrink: 0;
+}
+.doc-slot-check {
+  width: 18px; height: 18px; border-radius: 50%; background: rgba(111, 154, 99, 0.18); color: var(--verify);
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.doc-slot-empty {
+  font-size: 11px; color: var(--parchment-dim); border: 1px dashed var(--hairline-strong); border-radius: 4px;
+  padding: 10px; text-align: center;
+}
+.doc-slot-files { display: flex; flex-direction: column; }
+.doc-slot-files .doc-row { padding: 6px 0; }
+.doc-slot-upload-btn { align-self: flex-start; font-size: 11.5px; padding: 6px 12px; }
+.doc-slot-locked-note { font-size: 10.5px; color: var(--parchment-dim); line-height: 1.4; }
+
+/* ---------- No-Objection fan-out ---------- */
+.fanout-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--hairline); border-radius: 6px; }
+.fanout-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--hairline);
+  cursor: pointer; font-size: 12.5px;
+}
+.fanout-row:last-child { border-bottom: none; }
+.fanout-row-locked { cursor: not-allowed; opacity: 0.6; }
+.fanout-name { flex: 1; }
+.fanout-reason { font-size: 10.5px; color: var(--parchment-dim); }
 
 .ledger { position: relative; padding-left: 18px; }
 .ledger::before { content: ''; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 1px; background: var(--hairline-strong); }
@@ -633,6 +678,7 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 76px); }
   .machine, .empty-slot { width: 54px; height: 54px; }
 
   .field-grid { grid-template-columns: 1fr; gap: 12px; }
+  .doc-checklist { grid-template-columns: 1fr; }
   .drawer { width: 100vw; max-width: 100vw; }
   .bank-popover { width: calc(100vw - 32px); max-width: 280px; }
   .map-search { max-width: 100%; flex-basis: 100%; }

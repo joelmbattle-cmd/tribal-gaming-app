@@ -7,7 +7,10 @@ import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { preparePhoto } from "@/lib/image-client";
 import { PhotoAdjuster } from "@/components/photo-adjuster";
-import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
+import { DocumentChecklist, type ChecklistDocument } from "@/components/document-checklist";
+import { NoObjectionFanout } from "@/components/no-objection-fanout";
+import type { DocumentSlot } from "@/lib/document-slots";
+import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
   id: string;
@@ -36,7 +39,7 @@ export type ProfileViewItem = {
   archivedBy?: string | null;
   restoredAt?: string | null;
   restoredBy?: string | null;
-  documents: { id: string; name: string; date: string | null }[];
+  documents: ChecklistDocument[];
   history: { id: string; date: string; event: string }[];
 };
 
@@ -86,6 +89,7 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   // Holds a freshly-picked photo while the operator centers the face in the
   // adjuster, before it's cropped and handed to the upload action.
   const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
+  const [showFanout, setShowFanout] = useState(false);
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [personStatus, setPersonStatus] = useState("investigation");
@@ -104,7 +108,6 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   const [investigationCompletionDate, setInvestigationCompletionDate] = useState("");
   const [keyFindings, setKeyFindings] = useState("");
   const [pending, startTransition] = useTransition();
-  const fileInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const showToast = useToast();
@@ -202,23 +205,20 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !selected) return;
-
+  const uploadDocumentToSlot = (slot: DocumentSlot, file: File) => {
+    if (!selected) return;
     const formData = new FormData();
     formData.set("file", file);
 
     startTransition(async () => {
       try {
-        const { storage } = await addPersonDocumentAction(selected, formData);
+        const { storage } = await addPersonDocumentAction(selected, slot, formData);
         showToast(
           storage === "uploaded"
-            ? `Document "${file.name}" attached`
+            ? "Document attached"
             : storage === "skipped"
-              ? `"${file.name}" recorded — file storage is not configured`
-              : `Upload failed — "${file.name}" recorded without the file`,
+              ? "Document recorded — file storage is not configured"
+              : "Upload failed — document recorded without the file",
         );
         router.refresh();
       } catch {
@@ -227,11 +227,30 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     });
   };
 
-  const deleteDocument = (documentId: string) => {
+  const replaceDocument = (documentId: string, file: File) => {
+    const formData = new FormData();
+    formData.set("file", file);
+
     startTransition(async () => {
-      await deletePersonDocumentAction(documentId);
-      showToast("Document removed");
-      router.refresh();
+      try {
+        const { storage } = await replacePersonDocumentAction(documentId, formData);
+        showToast(storage === "uploaded" ? "File replaced" : "File replaced — storage is not configured");
+        router.refresh();
+      } catch {
+        showToast("Failed to replace document");
+      }
+    });
+  };
+
+  const removeDocument = (documentId: string) => {
+    startTransition(async () => {
+      try {
+        await deletePersonDocumentAction(documentId);
+        showToast("Document removed");
+        router.refresh();
+      } catch {
+        showToast("Failed to remove document");
+      }
     });
   };
 
@@ -342,7 +361,6 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
 
   return (
     <div>
-      <input ref={fileInput} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
       <input ref={photoInput} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhotoUpload} />
 
       <div className="view-head">
@@ -355,7 +373,10 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
             {showArchived ? "Show Active" : "Show Archived"}
           </button>
           {variant === "desktop" && !showArchived && (
-            <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Profile</button>
+            <>
+              <button className="btn" onClick={() => setShowFanout(true)}>Send No-Objection Letter</button>
+              <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Profile</button>
+            </>
           )}
         </div>
       </div>
@@ -596,23 +617,16 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
                 </>
               )}
 
-              <div className="section-label">Attached Documents ({person.documents.length})</div>
-              {person.documents.map((d) => (
-                <div className="doc-row" key={d.id}>
-                  <span className="doc-icon">▤</span><span className="doc-name">{d.name}</span><span className="doc-meta">{d.date ?? "pending"}</span>
-                  <button
-                    className="doc-delete-btn"
-                    onClick={() => deleteDocument(d.id)}
-                    disabled={pending}
-                    title="Delete document"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              <button className="btn" disabled={pending} onClick={() => fileInput.current?.click()} style={{ marginTop: 12 }}>
-                + Attach Document
-              </button>
+              <div className="section-label">Document Checklist</div>
+              <DocumentChecklist
+                documents={person.documents}
+                archived={person.archived}
+                pending={pending}
+                onUpload={uploadDocumentToSlot}
+                onReplace={replaceDocument}
+                onRemove={removeDocument}
+              />
+
               <div className="section-label">Investigation History</div>
               <div className="ledger">
                 {person.history.map((h) => (
@@ -888,6 +902,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
       {adjustingPhoto && (
         <PhotoAdjuster file={adjustingPhoto} onCancel={cancelPhotoAdjust} onConfirm={confirmPhotoAdjust} />
       )}
+
+      <NoObjectionFanout open={showFanout} onClose={() => setShowFanout(false)} people={people} />
     </div>
   );
 }

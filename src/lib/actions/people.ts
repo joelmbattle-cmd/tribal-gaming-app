@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
 import { uploadDocument } from "@/lib/blob";
 import { storePhoto } from "@/lib/photo";
+import { lockedReason, type DocumentSlot } from "@/lib/document-slots";
 import { revalidatePath } from "next/cache";
 
 export type PersonIntake = {
@@ -136,17 +137,36 @@ export async function uploadPersonPhotoAction(personId: string, formData: FormDa
     : { storage: photo.status };
 }
 
-export async function addPersonDocumentAction(personId: string, formData: FormData) {
+/**
+ * Every document a Licensing operator attaches now goes into one of the 11
+ * checklist slots — the old free-form "Attach Document" list has been
+ * replaced by the slot grid, so `slot` is required rather than optional.
+ */
+export async function addPersonDocumentAction(personId: string, slot: DocumentSlot, formData: FormData) {
   const user = await requireRole("LICENSING");
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) throw new Error("No file provided");
 
-  const upload = await uploadDocument(file, `people/${personId}`);
+  const person = await db.person.findUnique({
+    where: { id: personId },
+    select: { archived: true, documents: { select: { slot: true } } },
+  });
+  if (!person) throw new Error("Person not found");
+  // Archived profiles are view-only, and the results chain (Notice of
+  // Results -> No-Objection letter -> License Issuance) can't be skipped —
+  // both checked server-side so a stale drawer or a crafted request can't
+  // bypass either gate.
+  if (person.archived) throw new Error("Cannot modify documents on an archived profile");
+  const blocked = lockedReason(slot, person.documents);
+  if (blocked) throw new Error(blocked);
+
+  const upload = await uploadDocument(file, `people/${personId}/${slot.toLowerCase()}`);
 
   const [doc] = await db.$transaction([
     db.personDocument.create({
       data: {
         personId,
+        slot,
         name: file.name,
         blobUrl: upload.status === "uploaded" ? upload.url : null,
         // PersonDocument.date has no default in the schema, unlike its siblings;
@@ -161,13 +181,98 @@ export async function addPersonDocumentAction(personId: string, formData: FormDa
   return { id: doc.id, storage: upload.status };
 }
 
+/** Swaps the file behind an existing checklist slot entry without changing its id or slot. */
+export async function replacePersonDocumentAction(documentId: string, formData: FormData) {
+  const user = await requireRole("LICENSING");
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) throw new Error("No file provided");
+
+  const existing = await db.personDocument.findUnique({
+    where: { id: documentId },
+    select: { personId: true, slot: true, person: { select: { archived: true } } },
+  });
+  if (!existing) throw new Error("Document not found");
+  if (existing.person.archived) throw new Error("Cannot modify documents on an archived profile");
+
+  const upload = await uploadDocument(file, `people/${existing.personId}/${(existing.slot ?? "document").toLowerCase()}`);
+
+  const [doc] = await db.$transaction([
+    db.personDocument.update({
+      where: { id: documentId },
+      data: {
+        name: file.name,
+        blobUrl: upload.status === "uploaded" ? upload.url : null,
+        date: new Date(),
+      },
+    }),
+    db.person.update({ where: { id: existing.personId }, data: { lastModifiedBy: user.name } }),
+  ]);
+
+  revalidatePath("/licensing/profiles");
+  return { id: doc.id, storage: upload.status };
+}
+
 export async function deletePersonDocumentAction(documentId: string) {
   const user = await requireRole("LICENSING");
-  const doc = await db.personDocument.delete({
+  const existing = await db.personDocument.findUnique({
     where: { id: documentId },
+    select: { personId: true, person: { select: { archived: true } } },
   });
-  await db.person.update({ where: { id: doc.personId }, data: { lastModifiedBy: user.name } });
+  if (!existing) throw new Error("Document not found");
+  if (existing.person.archived) throw new Error("Cannot modify documents on an archived profile");
+
+  await db.personDocument.delete({ where: { id: documentId } });
+  await db.person.update({ where: { id: existing.personId }, data: { lastModifiedBy: user.name } });
   revalidatePath("/licensing/profiles");
+}
+
+/**
+ * No-Objection fan-out: one physical letter often covers many licensees, so
+ * this uploads the file once and attaches the same blob URL to every
+ * eligible selected profile's No-Objection slot in one pass. A profile is
+ * skipped (not an error for the whole batch) when it's archived or hasn't
+ * reached Notice of Results yet — the same gate `addPersonDocumentAction`
+ * enforces one profile at a time.
+ */
+export async function attachNoObjectionLetterAction(personIds: string[], formData: FormData) {
+  const user = await requireRole("LICENSING");
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) throw new Error("No file provided");
+  if (personIds.length === 0) throw new Error("No profiles selected");
+
+  const people = await db.person.findMany({
+    where: { id: { in: personIds } },
+    select: { id: true, archived: true, documents: { select: { slot: true } } },
+  });
+
+  const eligible = people.filter((p) => !p.archived && !lockedReason("NO_OBJECTION_LETTER", p.documents));
+  const skipped = people.length - eligible.length;
+  if (eligible.length === 0) {
+    throw new Error("No eligible profiles — each needs Notice of Results on file and must not be archived");
+  }
+
+  // Upload once and reuse the same blob URL for every profile's row, rather
+  // than re-uploading identical bytes per recipient.
+  const upload = await uploadDocument(file, `people/no-objection-letters/${Date.now()}`);
+  const now = new Date();
+
+  await db.$transaction([
+    ...eligible.map((p) =>
+      db.personDocument.create({
+        data: {
+          personId: p.id,
+          slot: "NO_OBJECTION_LETTER",
+          name: file.name,
+          blobUrl: upload.status === "uploaded" ? upload.url : null,
+          date: now,
+        },
+      }),
+    ),
+    db.person.updateMany({ where: { id: { in: eligible.map((p) => p.id) } }, data: { lastModifiedBy: user.name } }),
+  ]);
+
+  revalidatePath("/licensing/profiles");
+  return { attached: eligible.length, skipped, storage: upload.status };
 }
 
 export async function archivePersonAction(personId: string) {
