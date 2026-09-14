@@ -516,6 +516,182 @@ async function main() {
   });
 
   // -------------------------------------------------------------------
+  // Licensing Metrics demo data — gives the current-month default view on
+  // the Licensing Metrics & Reporting page (investigations completed,
+  // vendor vs. regular background duration, and Licensed/Denied/Withdrew/
+  // Separated outcome counts) real, non-empty numbers to show.
+  // -------------------------------------------------------------------
+  await db.person.create({
+    data: {
+      id: "LIC-00305",
+      name: "Holly Vance",
+      role: "Applicant — Gaming Employee",
+      status: "cleared",
+      dateOfBirth: new Date("1991-04-11"),
+      contactInfo: "(602) 555-0128 · h.vance@example.com",
+      licenseType: "Employee",
+      licenseNumber: "GE-2026-3402",
+      licenseIssueDate: new Date("2026-09-08"),
+      licenseExpirationDate: new Date("2028-09-08"),
+      applicationDate: new Date("2026-08-01"),
+      applicationStatus: "APPROVED",
+      backgroundStatus: "Approved",
+      suitabilityDetermination: "Suitable",
+      assignedInvestigator: "R. Delgado",
+      investigationStartDate: new Date("2026-08-01"),
+      investigationCompletionDate: new Date("2026-09-05"),
+      keyFindings: "No disqualifying history found. Cleared for licensure.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      documents: {
+        create: [
+          { name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-08-01") },
+          { name: "Notice of Results.pdf", slot: "NOTICE_OF_RESULTS", date: new Date("2026-09-02") },
+          { name: "License Issuance Certificate.pdf", slot: "LICENSE_ISSUANCE", date: new Date("2026-09-08") },
+        ],
+      },
+      history: {
+        create: [
+          { date: new Date("2026-08-01"), event: "Application submitted" },
+          { date: new Date("2026-09-05"), event: "Investigation completed — license issued" },
+        ],
+      },
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00306",
+      name: "Grant Osei",
+      role: "Vendor Principal — Operations Manager",
+      status: "cleared",
+      vendorCompanyId: silverline.id,
+      dateOfBirth: new Date("1979-10-02"),
+      contactInfo: "g.osei@silverlinegaming.example",
+      licenseType: "Vendor",
+      licenseNumber: "VP-2026-1188",
+      licenseIssueDate: new Date("2026-09-10"),
+      licenseExpirationDate: new Date("2027-03-01"),
+      applicationDate: new Date("2026-08-10"),
+      applicationStatus: "TEMPORARY_LICENSE",
+      backgroundStatus: "Approved",
+      suitabilityDetermination: "Suitable",
+      assignedInvestigator: "T. Whitcombe",
+      investigationStartDate: new Date("2026-08-12"),
+      investigationCompletionDate: new Date("2026-09-10"),
+      keyFindings: "No disqualifying history found. Temporary license issued pending full board review.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      documents: {
+        create: [{ name: "Temporary License Certificate.pdf", slot: "LICENSE_ISSUANCE", date: new Date("2026-09-10") }],
+      },
+      history: { create: [{ date: new Date("2026-09-10"), event: "Investigation completed — temporary license issued" }] },
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00307",
+      name: "Colin Brasher",
+      role: "Applicant — Gaming Employee",
+      status: "flagged",
+      dateOfBirth: new Date("1989-06-23"),
+      contactInfo: "(602) 555-0154 · c.brasher@example.com",
+      licenseType: "Employee",
+      applicationDate: new Date("2026-08-01"),
+      applicationStatus: "DENIED",
+      backgroundStatus: "Denied",
+      suitabilityDetermination: "Unsuitable",
+      assignedInvestigator: "R. Delgado",
+      investigationStartDate: new Date("2026-08-05"),
+      investigationCompletionDate: new Date("2026-09-03"),
+      keyFindings: "Disqualifying criminal history identified during background investigation. Application denied.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      history: {
+        create: [
+          { date: new Date("2026-08-01"), event: "Application submitted" },
+          { date: new Date("2026-09-03"), event: "Investigation completed — application denied" },
+        ],
+      },
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00308",
+      name: "Nadia Follette",
+      role: "Applicant — Gaming Employee",
+      status: "flagged",
+      dateOfBirth: new Date("1996-01-17"),
+      contactInfo: "(602) 555-0176 · n.follette@example.com",
+      licenseType: "Employee",
+      applicationDate: new Date("2026-09-02"),
+      applicationStatus: "WITHDRAWN",
+      backgroundStatus: "Not Started",
+      suitabilityDetermination: "Pending",
+      keyFindings: "Applicant withdrew before the background investigation was opened.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      history: { create: [{ date: new Date("2026-09-02"), event: "Application withdrawn by applicant" }] },
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00309",
+      name: "Ray Kowalczyk",
+      role: "Employee — Slot Technician",
+      status: "flagged",
+      dateOfBirth: new Date("1983-08-09"),
+      contactInfo: "(602) 555-0191 · r.kowalczyk@example.com",
+      licenseType: "Employee",
+      licenseNumber: "GE-2026-2915",
+      licenseIssueDate: new Date("2026-02-01"),
+      licenseExpirationDate: new Date("2028-02-01"),
+      applicationDate: new Date("2026-01-10"),
+      applicationStatus: "SEPARATED",
+      backgroundStatus: "Approved",
+      suitabilityDetermination: "Suitable",
+      assignedInvestigator: "R. Delgado",
+      investigationStartDate: new Date("2026-01-12"),
+      investigationCompletionDate: new Date("2026-01-25"),
+      keyFindings: "Cleared and licensed in January; separated from employment in September.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      documents: {
+        create: [{ name: "Separation Notice.pdf", slot: "SEPARATION_NOTICE", date: new Date("2026-09-12") }],
+      },
+      history: { create: [{ date: new Date("2026-09-12"), event: "Separated from employment" }] },
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00310",
+      name: "Elise Thornbury",
+      role: "Vendor Principal — Regional Manager",
+      status: "cleared",
+      vendorCompanyId: apex.id,
+      dateOfBirth: new Date("1977-12-19"),
+      contactInfo: "e.thornbury@apexroute.example",
+      licenseType: "Vendor",
+      licenseNumber: "VP-2026-1204",
+      licenseIssueDate: new Date("2026-09-13"),
+      licenseExpirationDate: new Date("2028-05-12"),
+      applicationDate: new Date("2026-08-15"),
+      applicationStatus: "LICENSED_WITH_CONDITIONS",
+      backgroundStatus: "Approved",
+      suitabilityDetermination: "Suitable",
+      assignedInvestigator: "T. Whitcombe",
+      investigationStartDate: new Date("2026-08-20"),
+      investigationCompletionDate: new Date("2026-09-12"),
+      keyFindings: "Cleared with monitoring conditions pending resolution of an unrelated civil matter.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      documents: {
+        create: [{ name: "License Issuance Certificate — Conditional.pdf", slot: "LICENSE_ISSUANCE", date: new Date("2026-09-13") }],
+      },
+      history: { create: [{ date: new Date("2026-09-12"), event: "Investigation completed — licensed with conditions" }] },
+    },
+  });
+
+  // -------------------------------------------------------------------
   // Applications — invite-to-accept pipeline, seeded across progress states
   // -------------------------------------------------------------------
   console.log("Seeding applications...");
