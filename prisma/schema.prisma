@@ -370,9 +370,13 @@ model Person {
   updatedAt      DateTime  @updatedAt
 }
 
-// Fixed 11-slot Licensing document checklist (R6). Nullable so the field
-// doesn't force a backfill and an Applicant Portal submission with no
-// Licensing-assigned category still has somewhere to live.
+// Fixed 11-slot Licensing document checklist (R6), plus BACKGROUND_CHECK —
+// rendered as its own labeled box rather than a checklist grid slot (see
+// BACKGROUND_CHECK_SLOT in src/lib/document-slots.ts) and reserved as the
+// only slot a future background-check vendor integration may write to
+// (see addBackgroundCheckDocumentAction in src/lib/actions/people.ts).
+// Nullable so the field doesn't force a backfill and an Applicant Portal
+// submission with no Licensing-assigned category still has somewhere to live.
 enum DocumentSlot {
   APPLICATION
   ID_PHOTO
@@ -385,6 +389,7 @@ enum DocumentSlot {
   NO_OBJECTION_LETTER
   LICENSE_ISSUANCE
   NIGC_RECEIPT
+  BACKGROUND_CHECK
 }
 
 model PersonDocument {

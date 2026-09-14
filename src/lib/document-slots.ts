@@ -33,8 +33,17 @@ export const DOCUMENT_SLOTS: DocumentSlotDef[] = [
   { key: "NIGC_RECEIPT", label: "NIGC receipt" },
 ];
 
+// Rendered as its own labeled box on the profile drawer, separate from the
+// 11-slot checklist grid above — not one of DOCUMENT_SLOTS, so it doesn't
+// get pulled into that grid's layout or numbering. Also the only slot a
+// future background-check vendor integration is allowed to write to; see
+// addBackgroundCheckDocumentAction in src/lib/actions/people.ts.
+export const BACKGROUND_CHECK_SLOT: DocumentSlotDef = { key: "BACKGROUND_CHECK", label: "Background Check" };
+
+const ALL_SLOT_DEFS: DocumentSlotDef[] = [...DOCUMENT_SLOTS, BACKGROUND_CHECK_SLOT];
+
 export function slotDef(slot: DocumentSlot): DocumentSlotDef | undefined {
-  return DOCUMENT_SLOTS.find((s) => s.key === slot);
+  return ALL_SLOT_DEFS.find((s) => s.key === slot);
 }
 
 export function slotLabel(slot: DocumentSlot): string {

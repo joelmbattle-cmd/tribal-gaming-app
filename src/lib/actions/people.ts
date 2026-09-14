@@ -181,6 +181,24 @@ export async function addPersonDocumentAction(personId: string, slot: DocumentSl
   return { id: doc.id, storage: upload.status };
 }
 
+/**
+ * Reserved entry point for a future background-check vendor integration —
+ * not wired to any vendor yet (no OAuth/webhook exists), but deliberately
+ * narrower than addPersonDocumentAction: it hardcodes slot to
+ * BACKGROUND_CHECK so whatever eventually calls this function can never
+ * write into any other checklist slot. Manual staff upload in the Background
+ * Check box already calls addPersonDocumentAction directly with this same
+ * slot; this function is the seam the disabled "Order Background Check"
+ * button's future vendor flow will call instead, kept typed and in place
+ * before that integration exists. When it's built, it will also need its
+ * own service-to-service auth (e.g. a signed webhook secret) in place of
+ * requireRole, since an external vendor can't hold an interactive staff
+ * session.
+ */
+export async function addBackgroundCheckDocumentAction(personId: string, formData: FormData) {
+  return addPersonDocumentAction(personId, "BACKGROUND_CHECK", formData);
+}
+
 /** Swaps the file behind an existing checklist slot entry without changing its id or slot. */
 export async function replacePersonDocumentAction(documentId: string, formData: FormData) {
   const user = await requireRole("LICENSING");

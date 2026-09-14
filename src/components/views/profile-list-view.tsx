@@ -7,9 +7,9 @@ import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { preparePhoto } from "@/lib/image-client";
 import { PhotoAdjuster } from "@/components/photo-adjuster";
-import { DocumentChecklist, type ChecklistDocument } from "@/components/document-checklist";
+import { DocumentChecklist, DocumentSlotCard, type ChecklistDocument } from "@/components/document-checklist";
 import { NoObjectionFanout } from "@/components/no-objection-fanout";
-import type { DocumentSlot } from "@/lib/document-slots";
+import { BACKGROUND_CHECK_SLOT, type DocumentSlot } from "@/lib/document-slots";
 import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
@@ -626,6 +626,32 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
                 onReplace={replaceDocument}
                 onRemove={removeDocument}
               />
+
+              <div className="section-label">Background Check</div>
+              <div className="doc-standalone">
+                <DocumentSlotCard
+                  label={BACKGROUND_CHECK_SLOT.label}
+                  critical={false}
+                  docs={person.documents.filter((d) => d.slot === "BACKGROUND_CHECK")}
+                  locked={null}
+                  archived={person.archived}
+                  pending={pending}
+                  onUpload={(file) => uploadDocumentToSlot("BACKGROUND_CHECK", file)}
+                  onReplace={replaceDocument}
+                  onRemove={removeDocument}
+                  extra={
+                    !person.archived && (
+                      <button
+                        className="btn doc-vendor-order-btn"
+                        disabled
+                        title="Vendor integration not yet connected — this will let staff order a check directly from this box"
+                      >
+                        Order Background Check — Coming Soon
+                      </button>
+                    )
+                  }
+                />
+              </div>
 
               <div className="section-label">Investigation History</div>
               <div className="ledger">

@@ -47,7 +47,13 @@ export function DocumentChecklist({
   );
 }
 
-function DocumentSlotCard({
+/**
+ * One slot's card: empty placeholder, or a checkmark plus its file(s) once
+ * ≥1 is attached, with add/replace/remove controls. Exported so the
+ * dedicated Background Check box (rendered outside the 11-slot grid, see
+ * ProfileListView) can reuse the exact same upload/replace/remove UI.
+ */
+export function DocumentSlotCard({
   label,
   critical,
   docs,
@@ -57,6 +63,7 @@ function DocumentSlotCard({
   onUpload,
   onReplace,
   onRemove,
+  extra,
 }: {
   label: string;
   critical: boolean;
@@ -67,6 +74,8 @@ function DocumentSlotCard({
   onUpload: (file: File) => void;
   onReplace: (documentId: string, file: File) => void;
   onRemove: (documentId: string) => void;
+  /** Extra content rendered at the bottom of the card, e.g. a stubbed vendor-order button. */
+  extra?: React.ReactNode;
 }) {
   const addInputRef = useRef<HTMLInputElement>(null);
   const complete = docs.length > 0;
@@ -108,6 +117,7 @@ function DocumentSlotCard({
       {!archived && locked && docs.length > 0 && (
         <div className="doc-slot-locked-note">🔒 {locked} — additional files blocked until resolved</div>
       )}
+      {extra}
     </div>
   );
 }
