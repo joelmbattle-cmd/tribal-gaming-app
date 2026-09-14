@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
+import type { LicensingApplicationStatus } from "@/lib/licensing-status";
 import { revalidatePath } from "next/cache";
 
 export type ApplicationIntake = {
@@ -10,12 +11,14 @@ export type ApplicationIntake = {
   role: string;
   dateOfBirth?: string; // yyyy-mm-dd from a date input
   contactInfo?: string;
+  position?: string;
+  jobDescription?: string;
   licenseType?: string;
   licenseNumber?: string;
   licenseIssueDate?: string;
   licenseExpirationDate?: string;
   applicationDate?: string;
-  applicationStatus?: string;
+  applicationStatus?: LicensingApplicationStatus;
   backgroundStatus?: string;
   suitabilityDetermination?: string;
   assignedInvestigator?: string;
@@ -39,6 +42,8 @@ export async function createApplicationAction(intake: ApplicationIntake) {
       role: intake.role,
       dateOfBirth: toDateOrNull(intake.dateOfBirth),
       contactInfo: intake.contactInfo || null,
+      position: intake.position || null,
+      jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
       licenseNumber: intake.licenseNumber || null,
       licenseIssueDate: toDateOrNull(intake.licenseIssueDate),
@@ -93,6 +98,8 @@ export async function acceptApplicationAction(applicationId: string) {
       status: "investigation",
       dateOfBirth: application.dateOfBirth,
       contactInfo: application.contactInfo ?? (application.email || null),
+      position: application.position,
+      jobDescription: application.jobDescription,
       licenseType: application.licenseType,
       licenseNumber: application.licenseNumber,
       licenseIssueDate: application.licenseIssueDate,

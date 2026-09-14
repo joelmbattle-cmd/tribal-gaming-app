@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "DocumentSlot" ADD VALUE 'BACKGROUND_CHECK';

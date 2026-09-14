@@ -12,6 +12,7 @@ import {
   acceptApplicationAction,
   rejectApplicationAction,
 } from "@/lib/actions/applications";
+import { LICENSING_STATUSES, licensingStatusLabel, type LicensingApplicationStatus } from "@/lib/licensing-status";
 
 export type ApplicationViewItem = {
   id: string;
@@ -21,12 +22,14 @@ export type ApplicationViewItem = {
   role: string;
   dateOfBirth?: string | null;
   contactInfo?: string | null;
+  position?: string | null;
+  jobDescription?: string | null;
   licenseType?: string | null;
   licenseNumber?: string | null;
   licenseIssueDate?: string | null;
   licenseExpirationDate?: string | null;
   applicationDate?: string | null;
-  applicationStatus?: string | null;
+  applicationStatus?: LicensingApplicationStatus | null;
   backgroundStatus?: string | null;
   suitabilityDetermination?: string | null;
   assignedInvestigator?: string | null;
@@ -55,7 +58,6 @@ const PROGRESS_CHIP: Record<string, string> = {
 };
 
 const LICENSE_TYPE_OPTIONS = ["Employee", "Vendor", "Key", "Other"];
-const APPLICATION_STATUS_OPTIONS = ["Received", "Under Review", "Additional Info Needed", "Accepted", "Rejected", "Closed"];
 const BACKGROUND_STATUS_OPTIONS = ["Not Started", "In Review", "Approved", "Denied", "Needs Info"];
 const SUITABILITY_OPTIONS = ["Pending", "Suitable", "Unsuitable"];
 
@@ -79,12 +81,14 @@ export function ApplicationListView({
   const [vendorCompanyId, setVendorCompanyId] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [contactInfo, setContactInfo] = useState("");
+  const [position, setPosition] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
   const [licenseType, setLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
   const [licenseNumber, setLicenseNumber] = useState("");
   const [licenseIssueDate, setLicenseIssueDate] = useState("");
   const [licenseExpirationDate, setLicenseExpirationDate] = useState("");
   const [applicationDate, setApplicationDate] = useState("");
-  const [applicationStatus, setApplicationStatus] = useState(APPLICATION_STATUS_OPTIONS[0]);
+  const [applicationStatus, setApplicationStatus] = useState<LicensingApplicationStatus>(LICENSING_STATUSES[0].key);
   const [backgroundStatus, setBackgroundStatus] = useState(BACKGROUND_STATUS_OPTIONS[0]);
   const [suitabilityDetermination, setSuitabilityDetermination] = useState(SUITABILITY_OPTIONS[0]);
   const [assignedInvestigator, setAssignedInvestigator] = useState("");
@@ -101,12 +105,14 @@ export function ApplicationListView({
     setVendorCompanyId("");
     setDateOfBirth("");
     setContactInfo("");
+    setPosition("");
+    setJobDescription("");
     setLicenseType(LICENSE_TYPE_OPTIONS[0]);
     setLicenseNumber("");
     setLicenseIssueDate("");
     setLicenseExpirationDate("");
     setApplicationDate("");
-    setApplicationStatus(APPLICATION_STATUS_OPTIONS[0]);
+    setApplicationStatus(LICENSING_STATUSES[0].key);
     setBackgroundStatus(BACKGROUND_STATUS_OPTIONS[0]);
     setSuitabilityDetermination(SUITABILITY_OPTIONS[0]);
     setAssignedInvestigator("");
@@ -129,6 +135,8 @@ export function ApplicationListView({
           vendorCompanyId: vendorCompanyId || undefined,
           dateOfBirth,
           contactInfo: contactInfo.trim(),
+          position: position.trim(),
+          jobDescription: jobDescription.trim(),
           licenseType,
           licenseNumber: licenseNumber.trim(),
           licenseIssueDate,
@@ -232,6 +240,8 @@ export function ApplicationListView({
                 <div><div className="field-label">Vendor Company</div><div className="field-value">{application.vendorCompanyName || "—"}</div></div>
                 <div><div className="field-label">Date of Birth</div><div className="field-value">{application.dateOfBirth || "—"}</div></div>
                 <div><div className="field-label">Contact Info</div><div className="field-value">{application.contactInfo || "—"}</div></div>
+                <div><div className="field-label">Position</div><div className="field-value">{application.position || "—"}</div></div>
+                <div><div className="field-label">Job Description</div><div className="field-value">{application.jobDescription || "—"}</div></div>
               </div>
 
               <div className="section-label">License</div>
@@ -245,7 +255,7 @@ export function ApplicationListView({
               <div className="section-label">Application &amp; Status</div>
               <div className="field-grid">
                 <div><div className="field-label">Application Date</div><div className="field-value">{application.applicationDate || "—"}</div></div>
-                <div><div className="field-label">Application Status</div><div className="field-value">{application.applicationStatus || "—"}</div></div>
+                <div><div className="field-label">Application Status</div><div className="field-value">{licensingStatusLabel(application.applicationStatus)}</div></div>
                 <div><div className="field-label">Background Status</div><div className="field-value">{application.backgroundStatus || "—"}</div></div>
                 <div><div className="field-label">Suitability Determination</div><div className="field-value">{application.suitabilityDetermination || "—"}</div></div>
               </div>
@@ -349,6 +359,14 @@ export function ApplicationListView({
               <label className="field-label">Contact Info</label>
               <input type="text" placeholder="Phone / email / address" value={contactInfo} onChange={(e) => setContactInfo(e.target.value)} className="field-input" disabled={pending} />
             </div>
+            <div>
+              <label className="field-label">Position</label>
+              <input type="text" placeholder="Optional" value={position} onChange={(e) => setPosition(e.target.value)} className="field-input" disabled={pending} />
+            </div>
+            <div>
+              <label className="field-label">Job Description</label>
+              <input type="text" placeholder="Optional" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} className="field-input" disabled={pending} />
+            </div>
           </div>
 
           <div className="section-label">License</div>
@@ -381,8 +399,8 @@ export function ApplicationListView({
             </div>
             <div>
               <label className="field-label">Application Status</label>
-              <select value={applicationStatus} onChange={(e) => setApplicationStatus(e.target.value)} className="field-input" disabled={pending}>
-                {APPLICATION_STATUS_OPTIONS.map((o) => (<option key={o} value={o}>{o}</option>))}
+              <select value={applicationStatus} onChange={(e) => setApplicationStatus(e.target.value as LicensingApplicationStatus)} className="field-input" disabled={pending}>
+                {LICENSING_STATUSES.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
               </select>
             </div>
             <div>

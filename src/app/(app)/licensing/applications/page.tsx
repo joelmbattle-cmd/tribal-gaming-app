@@ -16,6 +16,8 @@ export default async function ApplicationsPage() {
         role: a.role,
         dateOfBirth: a.dateOfBirth ? a.dateOfBirth.toISOString().slice(0, 10) : null,
         contactInfo: a.contactInfo,
+        position: a.position,
+        jobDescription: a.jobDescription,
         licenseType: a.licenseType,
         licenseNumber: a.licenseNumber,
         licenseIssueDate: a.licenseIssueDate ? a.licenseIssueDate.toISOString().slice(0, 10) : null,

@@ -6,11 +6,11 @@ import bcrypt from "bcryptjs";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const db = new PrismaClient({ adapter });
 
-// Fabricated demo "photo on file" for seeded exclusion records — a generic
-// head-and-shoulders silhouette on a flat color, encoded inline so the demo
-// has faces in the list without depending on a network image host or
-// committing binary assets.
-function fakeExclusionPhoto(bg: string): string {
+// Fabricated demo "photo on file" for seeded exclusion and person records —
+// a generic head-and-shoulders silhouette on a flat color, encoded inline so
+// the demo has faces in the list without depending on a network image host
+// or committing binary assets.
+function fakeDemoPhoto(bg: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
     <rect width="100" height="100" fill="${bg}"/>
     <circle cx="50" cy="38" r="18" fill="#efe7d6"/>
@@ -242,11 +242,14 @@ async function main() {
       name: "Marcus Whitfield",
       role: "Applicant — Key Employee",
       status: "investigation",
+      photoUrl: fakeDemoPhoto("#4a3f5c"),
       dateOfBirth: new Date("1985-02-19"),
       contactInfo: "(602) 555-0142 · m.whitfield@example.com",
+      position: "Table Games Pit Boss",
+      jobDescription: "Supervises table games operations, oversees dealer staff, authorizes comps and rate changes within delegated limits.",
       licenseType: "Key",
       applicationDate: new Date("2026-07-01"),
-      applicationStatus: "Under Review",
+      applicationStatus: "READY_TO_REVIEW",
       backgroundStatus: "In Review",
       suitabilityDetermination: "Pending",
       assignedInvestigator: "R. Delgado",
@@ -254,12 +257,22 @@ async function main() {
       keyFindings: "Reference checks in progress; no adverse findings to date.",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
+      // Through Notice of Results and the No-Objection letter — ready for
+      // Issuance, matching the "Critical Pipeline" smart folder's rule 3
+      // (see isCriticalPipeline).
       documents: {
         create: [
-          { name: "Application Form.pdf", date: new Date("2026-07-01"), submitted: true },
-          { name: "Background Consent.pdf", date: new Date("2026-07-01"), submitted: true },
-          { name: "Employment History.pdf", date: new Date("2026-07-05"), submitted: true },
-          { name: "Fingerprint Card", date: null, submitted: false },
+          { name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-07-01") },
+          { name: "Driver's License.pdf", slot: "ID_PHOTO", date: new Date("2026-07-01") },
+          { name: "Social Security Card.pdf", slot: "SSN_CARD", date: new Date("2026-07-01") },
+          { name: "Criminal History — State Repository.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-07-10") },
+          { name: "Criminal History — FBI.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-07-12") },
+          { name: "Fingerprint Card.pdf", slot: "FINGERPRINTS", date: new Date("2026-07-08") },
+          { name: "Background Check Report — ClearHire Screening.pdf", slot: "BACKGROUND_CHECK", date: new Date("2026-07-20") },
+          { name: "Investigative Report.pdf", slot: "INVESTIGATIVE_REPORT", date: new Date("2026-08-01") },
+          { name: "Suitability Determination Report.pdf", slot: "SUITABILITY_REPORT", date: new Date("2026-08-10") },
+          { name: "Notice of Results.pdf", slot: "NOTICE_OF_RESULTS", date: new Date("2026-08-12") },
+          { name: "No-Objection Letter — NIGC.pdf", slot: "NO_OBJECTION_LETTER", date: new Date("2026-08-20") },
         ],
       },
       history: {
@@ -267,6 +280,7 @@ async function main() {
           { date: new Date("2026-07-01"), event: "Application submitted" },
           { date: new Date("2026-07-08"), event: "Background investigation opened" },
           { date: new Date("2026-08-12"), event: "Reference checks in progress" },
+          { date: new Date("2026-08-20"), event: "No-Objection letter received from NIGC" },
         ],
       },
     },
@@ -277,14 +291,17 @@ async function main() {
       name: "Dana Ochoa",
       role: "Applicant — Gaming Employee",
       status: "cleared",
+      photoUrl: fakeDemoPhoto("#3f544a"),
       dateOfBirth: new Date("1992-11-30"),
       contactInfo: "(602) 555-0187 · dana.ochoa@example.com",
+      position: "Slot Technician",
+      jobDescription: "Performs routine maintenance, jackpot verification, and minor repairs on electronic gaming devices across the floor.",
       licenseType: "Employee",
       licenseNumber: "GE-2026-3341",
       licenseIssueDate: new Date("2026-06-30"),
       licenseExpirationDate: new Date("2028-06-30"),
       applicationDate: new Date("2026-05-14"),
-      applicationStatus: "Accepted",
+      applicationStatus: "APPROVED",
       backgroundStatus: "Approved",
       suitabilityDetermination: "Suitable",
       assignedInvestigator: "R. Delgado",
@@ -293,11 +310,24 @@ async function main() {
       keyFindings: "No disqualifying history found. Cleared for licensure.",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
+      // Fully complete: every checklist slot on file through NIGC receipt.
       documents: {
         create: [
-          { name: "Application Form.pdf", date: new Date("2026-05-14"), submitted: true },
-          { name: "Background Consent.pdf", date: new Date("2026-05-14"), submitted: true },
-          { name: "Investigation Summary.pdf", date: new Date("2026-06-30"), submitted: true },
+          { name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-05-14") },
+          { name: "Driver's License.pdf", slot: "ID_PHOTO", date: new Date("2026-05-14") },
+          { name: "Social Security Card.pdf", slot: "SSN_CARD", date: new Date("2026-05-14") },
+          { name: "Criminal History — State Repository.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-05-22") },
+          { name: "Criminal History — FBI.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-05-24") },
+          { name: "Fingerprint Card.pdf", slot: "FINGERPRINTS", date: new Date("2026-05-20") },
+          { name: "Background Check Report — ClearHire Screening.pdf", slot: "BACKGROUND_CHECK", date: new Date("2026-06-05") },
+          { name: "Investigative Report.pdf", slot: "INVESTIGATIVE_REPORT", date: new Date("2026-06-10") },
+          { name: "Suitability Determination Report.pdf", slot: "SUITABILITY_REPORT", date: new Date("2026-06-20") },
+          { name: "Notice of Results.pdf", slot: "NOTICE_OF_RESULTS", date: new Date("2026-06-25") },
+          { name: "No-Objection Letter — NIGC.pdf", slot: "NO_OBJECTION_LETTER", date: new Date("2026-06-28") },
+          { name: "License Issuance Certificate.pdf", slot: "LICENSE_ISSUANCE", date: new Date("2026-06-30") },
+          { name: "NIGC Receipt.pdf", slot: "NIGC_RECEIPT", date: new Date("2026-07-05") },
+          { name: "Written Warning — Late Shift Reporting.pdf", slot: "LICENSING_ACTIONS", date: new Date("2026-08-01") },
+          { name: "Corrective Action Plan Acknowledgment.pdf", slot: "LICENSING_ACTIONS", date: new Date("2026-08-10") },
         ],
       },
       history: {
@@ -305,6 +335,7 @@ async function main() {
           { date: new Date("2026-05-14"), event: "Application submitted" },
           { date: new Date("2026-05-20"), event: "Background investigation opened" },
           { date: new Date("2026-06-30"), event: "Investigation completed — license issued" },
+          { date: new Date("2026-08-01"), event: "Written warning issued — late shift reporting" },
         ],
       },
     },
@@ -315,11 +346,12 @@ async function main() {
       name: "Priya Ramanathan",
       role: "Vendor — Gaming Equipment",
       status: "flagged",
+      photoUrl: fakeDemoPhoto("#5c4a3f"),
       dateOfBirth: new Date("1980-06-05"),
       contactInfo: "(480) 555-0119 · p.ramanathan@vendorco.example",
       licenseType: "Vendor",
       applicationDate: new Date("2026-08-02"),
-      applicationStatus: "Additional Info Needed",
+      applicationStatus: "APPLICATION_NOT_FINISHED",
       backgroundStatus: "Needs Info",
       suitabilityDetermination: "Pending",
       assignedInvestigator: "T. Whitcombe",
@@ -327,10 +359,16 @@ async function main() {
       keyFindings: "Discrepancy flagged — prior license action in another jurisdiction. Awaiting explanation from applicant.",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
+      // Stalled pending the discrepancy explanation — hasn't reached Notice of
+      // Results yet, so No-Objection stays locked (and this profile shows as
+      // ineligible in the fan-out selector).
       documents: {
         create: [
-          { name: "Application Form.pdf", date: new Date("2026-08-02"), submitted: true },
-          { name: "Vendor Disclosure.pdf", date: new Date("2026-08-02"), submitted: true },
+          { name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-08-02") },
+          { name: "Driver's License.pdf", slot: "ID_PHOTO", date: new Date("2026-08-02") },
+          { name: "Criminal History — State Repository.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-08-16") },
+          { name: "Criminal History — Prior Jurisdiction.pdf", slot: "CRIMINAL_HISTORY", date: new Date("2026-08-18") },
+          { name: "Fingerprint Card.pdf", slot: "FINGERPRINTS", date: new Date("2026-08-15") },
         ],
       },
       history: {
@@ -351,16 +389,15 @@ async function main() {
       contactInfo: "(602) 555-0163 · t.herrera@example.com",
       licenseType: "Key",
       applicationDate: new Date("2026-08-10"),
-      applicationStatus: "Received",
+      applicationStatus: "APPLICATION_TURNED_IN",
       backgroundStatus: "Not Started",
       suitabilityDetermination: "Pending",
       createdBy: "Licensing Director (Demo)",
       lastModifiedBy: "Licensing Director (Demo)",
+      // Just received — only the application is on file, so the entire
+      // results chain (and the No-Objection fan-out) stays locked.
       documents: {
-        create: [
-          { name: "Application Form.pdf", date: new Date("2026-08-10"), submitted: true },
-          { name: "Background Consent.pdf", date: new Date("2026-08-10"), submitted: true },
-        ],
+        create: [{ name: "Application Form.pdf", slot: "APPLICATION", date: new Date("2026-08-10") }],
       },
       history: {
         create: [
@@ -405,7 +442,7 @@ async function main() {
       licenseIssueDate: new Date("2024-03-01"),
       licenseExpirationDate: new Date("2027-03-01"),
       applicationDate: new Date("2024-01-10"),
-      applicationStatus: "Accepted",
+      applicationStatus: "APPROVED",
       backgroundStatus: "Approved",
       suitabilityDetermination: "Suitable",
       assignedInvestigator: "T. Whitcombe",
@@ -428,7 +465,7 @@ async function main() {
       contactInfo: "m.ibe@silverlinegaming.example",
       licenseType: "Vendor",
       applicationDate: new Date("2026-08-01"),
-      applicationStatus: "Under Review",
+      applicationStatus: "READY_TO_REVIEW",
       backgroundStatus: "In Review",
       suitabilityDetermination: "Pending",
       assignedInvestigator: "T. Whitcombe",
@@ -466,7 +503,7 @@ async function main() {
       contactInfo: "w.lipscomb@apexroute.example",
       licenseType: "Vendor",
       applicationDate: new Date("2025-05-01"),
-      applicationStatus: "Additional Info Needed",
+      applicationStatus: "APPLICATION_NOT_FINISHED",
       backgroundStatus: "Needs Info",
       suitabilityDetermination: "Pending",
       assignedInvestigator: "R. Delgado",
@@ -510,7 +547,7 @@ async function main() {
       contactInfo: "(602) 555-0199",
       licenseType: "Employee",
       applicationDate: new Date("2026-08-25"),
-      applicationStatus: "Received",
+      applicationStatus: "APPLICATION_TURNED_IN",
       backgroundStatus: "Not Started",
       suitabilityDetermination: "Pending",
       invitedBy: "Licensing Director (Demo)",
@@ -536,7 +573,7 @@ async function main() {
       licenseIssueDate: new Date("2026-08-10"),
       licenseExpirationDate: new Date("2028-08-10"),
       applicationDate: new Date("2026-07-05"),
-      applicationStatus: "Accepted",
+      applicationStatus: "APPROVED",
       backgroundStatus: "Approved",
       suitabilityDetermination: "Suitable",
       assignedInvestigator: "R. Delgado",
@@ -561,7 +598,7 @@ async function main() {
           licenseIssueDate: new Date("2026-08-10"),
           licenseExpirationDate: new Date("2028-08-10"),
           applicationDate: new Date("2026-07-05"),
-          applicationStatus: "Accepted",
+          applicationStatus: "APPROVED",
           backgroundStatus: "Approved",
           suitabilityDetermination: "Suitable",
           assignedInvestigator: "R. Delgado",
@@ -722,7 +759,7 @@ async function main() {
       status: "Active",
       enrolled: new Date("2025-11-02"),
       term: "5-year term",
-      photoUrl: fakeExclusionPhoto("#5c4a2e"),
+      photoUrl: fakeDemoPhoto("#5c4a2e"),
       personName: "Harold J. Whitmore",
       dateOfBirth: new Date("1978-04-12"),
       governmentId: "Tribal ID# TGA-004471",
@@ -746,7 +783,7 @@ async function main() {
       status: "Active",
       enrolled: new Date("2025-06-20"),
       term: "Lifetime term",
-      photoUrl: fakeExclusionPhoto("#3f5443"),
+      photoUrl: fakeDemoPhoto("#3f5443"),
       personName: "Linda R. Castillo",
       aliases: "Linda Reyes",
       dateOfBirth: new Date("1965-09-03"),
