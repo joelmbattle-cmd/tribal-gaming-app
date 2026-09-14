@@ -20,6 +20,7 @@ export default async function ProfilesPage({
         photoUrl: p.photoUrl,
         dateOfBirth: p.dateOfBirth ? p.dateOfBirth.toISOString().slice(0, 10) : null,
         contactInfo: p.contactInfo,
+        ssn: p.ssn,
         position: p.position,
         jobDescription: p.jobDescription,
         licenseType: p.licenseType,

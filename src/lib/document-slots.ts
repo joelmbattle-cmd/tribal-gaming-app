@@ -32,6 +32,7 @@ export const DOCUMENT_SLOTS: DocumentSlotDef[] = [
   { key: "NOTICE_OF_RESULTS", label: "Notice of results", critical: true },
   { key: "NO_OBJECTION_LETTER", label: "No-objection / objection letter", critical: true, requires: "NOTICE_OF_RESULTS" },
   { key: "LICENSE_ISSUANCE", label: "Issuance of license", critical: true, requires: "NO_OBJECTION_LETTER" },
+  { key: "DENIAL_LETTER", label: "Denial letter" },
   { key: "NIGC_RECEIPT", label: "NIGC receipt" },
   { key: "LICENSING_ACTIONS", label: "Licensing actions" },
   { key: "SEPARATION_NOTICE", label: "Separation notice" },
