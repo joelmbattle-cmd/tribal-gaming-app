@@ -15,6 +15,7 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { href: "/licensing/profiles", label: "Person Profiles", icon: "◍" },
     { href: "/licensing/vendors", label: "Vendor Licensing", icon: "◈" },
     { href: "/licensing/applications", label: "Applications", icon: "▥" },
+    { href: "/licensing/monitor", label: "License Monitor", icon: "⏰" },
     { href: "/licensing/metrics", label: "Metrics & Reporting", icon: "▲" },
   ],
   APPLICANT: [{ href: "/applicant", label: "My Application", icon: "◍" }],

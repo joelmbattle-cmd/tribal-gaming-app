@@ -691,6 +691,100 @@ async function main() {
     },
   });
 
+  // License Monitor demo data — a couple of profiles whose license is
+  // already past its expiration, and one due soon, so the Monitor's
+  // expired/expiring-soon lists aren't empty out of the box.
+  await db.person.create({
+    data: {
+      id: "LIC-00311",
+      name: "Marisol Vega",
+      role: "Applicant — Gaming Employee",
+      status: "cleared",
+      dateOfBirth: new Date("1983-06-14"),
+      contactInfo: "(602) 555-0155 · m.vega@example.com",
+      licenseType: "Employee",
+      licenseNumber: "GE-2024-1187",
+      licenseIssueDate: new Date("2024-08-20"),
+      licenseExpirationDate: new Date("2026-08-20"),
+      applicationDate: new Date("2024-07-10"),
+      applicationStatus: "APPROVED",
+      backgroundStatus: "Approved",
+      suitabilityDetermination: "Suitable",
+      assignedInvestigator: "R. Delgado",
+      investigationStartDate: new Date("2024-07-15"),
+      investigationCompletionDate: new Date("2024-08-15"),
+      keyFindings: "No disqualifying history found. Cleared for licensure.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      documents: {
+        create: [{ name: "License Issuance Certificate.pdf", slot: "LICENSE_ISSUANCE", date: new Date("2024-08-20") }],
+      },
+      history: { create: [{ date: new Date("2024-08-20"), event: "Investigation completed — license issued" }] },
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00312",
+      name: "Theo Bramwell",
+      role: "Applicant — Key Employee",
+      status: "cleared",
+      dateOfBirth: new Date("1986-02-27"),
+      contactInfo: "(602) 555-0171 · t.bramwell@example.com",
+      licenseType: "Key",
+      licenseNumber: "KE-2024-0876",
+      licenseIssueDate: new Date("2024-10-15"),
+      licenseExpirationDate: new Date("2026-10-15"),
+      applicationDate: new Date("2024-09-01"),
+      applicationStatus: "APPROVED",
+      backgroundStatus: "Approved",
+      suitabilityDetermination: "Suitable",
+      assignedInvestigator: "T. Whitcombe",
+      investigationStartDate: new Date("2024-09-05"),
+      investigationCompletionDate: new Date("2024-10-10"),
+      keyFindings: "No disqualifying history found. Cleared for licensure.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      documents: {
+        create: [{ name: "License Issuance Certificate.pdf", slot: "LICENSE_ISSUANCE", date: new Date("2024-10-15") }],
+      },
+      history: { create: [{ date: new Date("2024-10-15"), event: "Investigation completed — license issued" }] },
+    },
+  });
+
+  // License Monitor demo data — vendor companies whose license is already
+  // expired, or due soon, alongside Silverline/Apex above (both licensed
+  // well into the future).
+  await db.vendorCompany.create({
+    data: {
+      id: "VEN-1003",
+      name: "Meridian Gaming Supply",
+      status: "flagged",
+      contactInfo: "(602) 555-0140 · licensing@meridiangaming.example",
+      address: "77 Commerce Dr, Mesa, AZ",
+      licenseType: "Distributor",
+      licenseNumber: "VL-2023-0027",
+      licenseIssueDate: new Date("2023-07-01"),
+      licenseExpirationDate: new Date("2026-07-01"),
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+    },
+  });
+  await db.vendorCompany.create({
+    data: {
+      id: "VEN-1004",
+      name: "Cascade Amusement Partners",
+      status: "cleared",
+      contactInfo: "(602) 555-0162 · licensing@cascadeamusement.example",
+      address: "205 Harbor View Rd, Tempe, AZ",
+      licenseType: "Manufacturer",
+      licenseNumber: "VL-2024-0113",
+      licenseIssueDate: new Date("2024-11-01"),
+      licenseExpirationDate: new Date("2026-11-01"),
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+    },
+  });
+
   // -------------------------------------------------------------------
   // Applications — invite-to-accept pipeline, seeded across progress states
   // -------------------------------------------------------------------
