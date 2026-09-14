@@ -92,8 +92,13 @@ function signatureBlock(): string {
   </div>`;
 }
 
-function buildSuitability(p: FormPersonData): string {
-  const body = `
+// Each of these returns only the section's own markup (letterhead-free) —
+// buildForm() below wraps one in a full single-document <html> shell via
+// page(), and buildNigcPacket() further down wraps several in one shared
+// shell, each with its own letterhead, for a combined multi-document PDF.
+
+function suitabilityBody(p: FormPersonData): string {
+  return `
     <div class="meta">Date: ${todayLong()} · Profile ID: ${escapeHtml(p.id)}</div>
     <table class="field-table">
       ${fieldRow("Full Legal Name", p.name)}
@@ -104,11 +109,10 @@ function buildSuitability(p: FormPersonData): string {
 Suitability Determination: ${p.suitabilityDeterminationLabel}</div>
     ${signatureBlock()}
   `;
-  return page("Suitability Determination", body);
 }
 
-function buildNoticeOfResults(p: FormPersonData): string {
-  const body = `
+function noticeOfResultsBody(p: FormPersonData): string {
+  return `
     <div class="meta">Date: ${todayLong()} · Profile ID: ${escapeHtml(p.id)}</div>
     <table class="field-table">
       ${fieldRow("Full Legal Name", p.name)}
@@ -123,11 +127,10 @@ Application Status: ${p.applicationStatusLabel}
 Findings: ${p.keyFindings || DASH}</div>
     ${signatureBlock()}
   `;
-  return page("Notice of Results", body);
 }
 
-function buildIssuance(p: FormPersonData): string {
-  const body = `
+function issuanceBody(p: FormPersonData): string {
+  return `
     <div class="meta">Date: ${todayLong()} · Profile ID: ${escapeHtml(p.id)}</div>
     <table class="field-table">
       ${fieldRow("Full Legal Name", p.name)}
@@ -142,11 +145,10 @@ function buildIssuance(p: FormPersonData): string {
     <div class="body-text">This certifies that a gaming license has been issued to the above-named individual under the terms and conditions of applicable tribal gaming regulations, effective as of the issue date shown above.</div>
     ${signatureBlock()}
   `;
-  return page("Issuance of License", body);
 }
 
-function buildDenial(p: FormPersonData): string {
-  const body = `
+function denialBody(p: FormPersonData): string {
+  return `
     <div class="meta">Date: ${todayLong()} · Profile ID: ${escapeHtml(p.id)}</div>
     <table class="field-table">
       ${fieldRow("Full Legal Name", p.name)}
@@ -163,16 +165,91 @@ Reason: ${p.keyFindings || DASH}
 You may have the right to appeal this determination in accordance with applicable tribal gaming regulations.</div>
     ${signatureBlock()}
   `;
-  return page("Denial Letter", body);
 }
 
-const BUILDERS: Record<FormType, (p: FormPersonData) => string> = {
-  SUITABILITY: buildSuitability,
-  NOTICE_OF_RESULTS: buildNoticeOfResults,
-  ISSUANCE: buildIssuance,
-  DENIAL: buildDenial,
+const SECTION_BODY: Record<FormType, (p: FormPersonData) => string> = {
+  SUITABILITY: suitabilityBody,
+  NOTICE_OF_RESULTS: noticeOfResultsBody,
+  ISSUANCE: issuanceBody,
+  DENIAL: denialBody,
 };
 
 export function buildForm(formType: FormType, person: FormPersonData): string {
-  return BUILDERS[formType](person);
+  return page(FORM_LABEL[formType], SECTION_BODY[formType](person));
+}
+
+// ---------------------------------------------------------------------------
+// NIGC batch packet — combines each selected licensee's completed Notice of
+// Results and/or Issuance of License letters (never No-Objection — that's a
+// separate per-profile send/confirm step, see attachNoObjectionLetterAction)
+// into one printable document, reusing the exact same section templates
+// above so the packet's letters are byte-identical to the single-form ones.
+// ---------------------------------------------------------------------------
+
+export type PacketFormType = "NOTICE_OF_RESULTS" | "ISSUANCE";
+
+export type NigcPacketEntry = {
+  formType: PacketFormType;
+  person: FormPersonData;
+};
+
+function packetSection(formType: PacketFormType, person: FormPersonData): string {
+  return `<section class="packet-doc">
+    <div class="letterhead">
+      <div class="agency">Tribal Gaming Compliance &amp; Licensing Platform</div>
+      <div class="title">${escapeHtml(FORM_LABEL[formType])}</div>
+    </div>
+    ${SECTION_BODY[formType](person)}
+  </section>`;
+}
+
+export function buildNigcPacket(entries: NigcPacketEntry[]): string {
+  const manifestRows = entries
+    .map((e) => `<tr><td>${escapeHtml(e.person.name)}</td><td>${escapeHtml(e.person.id)}</td><td>${escapeHtml(FORM_LABEL[e.formType])}</td></tr>`)
+    .join("");
+
+  const cover = `<section class="packet-doc cover">
+    <div class="letterhead">
+      <div class="agency">Tribal Gaming Compliance &amp; Licensing Platform</div>
+      <div class="title">NIGC Submission Packet</div>
+    </div>
+    <div class="meta">Generated ${todayLong()} · ${entries.length} document${entries.length === 1 ? "" : "s"} · ${new Set(entries.map((e) => e.person.id)).size} licensee${new Set(entries.map((e) => e.person.id)).size === 1 ? "" : "s"}</div>
+    <div class="body-text">This packet contains the Notice of Results and/or Issuance of License letters listed below, compiled for bulk submission to the National Indian Gaming Commission. No-Objection letters are not included — those are sent and confirmed per profile.</div>
+    <table class="field-table">
+      <tr><td class="label">Licensee</td><td class="label">Profile ID</td><td class="label">Document</td></tr>
+      ${manifestRows}
+    </table>
+  </section>`;
+
+  const docs = entries.map((e) => packetSection(e.formType, e.person)).join("\n");
+
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>NIGC Submission Packet</title>
+<style>
+  @media print { @page { margin: 0.75in; } }
+  body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 0; padding: 0; line-height: 1.55; }
+  .packet-doc { max-width: 680px; margin: 40px auto; padding: 0 24px 40px; page-break-after: always; }
+  .packet-doc:last-child { page-break-after: auto; }
+  .letterhead { text-align: center; border-bottom: 3px double #1a1a1a; padding-bottom: 14px; margin-bottom: 28px; }
+  .letterhead .agency { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #444; }
+  .letterhead .title { font-size: 20px; font-weight: bold; margin-top: 6px; letter-spacing: 0.03em; text-transform: uppercase; }
+  .meta { font-size: 13px; color: #444; margin-bottom: 24px; }
+  .field-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+  .field-table td { padding: 6px 8px; border: 1px solid #ccc; vertical-align: top; }
+  .field-table td.label { width: 180px; font-weight: bold; background: #f4f4f0; }
+  .cover .field-table td.label { width: auto; }
+  .body-text { font-size: 14px; margin: 20px 0; white-space: pre-wrap; }
+  .signature-block { margin-top: 56px; font-size: 14px; }
+  .signature-line { border-top: 1px solid #1a1a1a; width: 320px; margin-top: 48px; padding-top: 6px; }
+  @media screen { body { background: #ddd; } .packet-doc { background: #fafaf7; box-shadow: 0 0 0 1px #ddd; padding-top: 40px; } }
+</style>
+</head>
+<body>
+  ${cover}
+  ${docs}
+</body>
+</html>`;
 }
