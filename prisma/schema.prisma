@@ -316,6 +316,22 @@ model ExclusionNote {
 // Licensing (R6) / Applicant Portal (R9)
 // ---------------------------------------------------------------------------
 
+// Drives the Licensing list's status folders/tabs. "Critical docs incomplete"
+// is a separate, computed smart folder (profiles missing Notice of Results,
+// No-Objection, and/or Issuance) — deliberately not a value here, since a
+// profile's status and its document completeness are independent facts.
+enum LicensingApplicationStatus {
+  APPLICATION_NOT_FINISHED
+  APPLICATION_TURNED_IN
+  READY_TO_REVIEW
+  APPROVED
+  TEMPORARY_LICENSE
+  LICENSED_WITH_CONDITIONS
+  DENIED
+  WITHDRAWN
+  SEPARATED
+}
+
 model Person {
   id        String           @id @default(cuid())
   // Already serves as the workspace's "Full Legal Name" field — the seeded
@@ -344,6 +360,13 @@ model Person {
   dateOfBirth  DateTime?
   contactInfo  String?   // phone / email / address, combined per the workspace's Contact Info field
 
+  // --- Position & Job Description --------------------------------------------
+  // Held for the future static forms pass (Suitability determination, Notice
+  // of results, Issuance of license, Denial letter), whose prefill spec
+  // includes position alongside name/SSN/DOB — not built this pass.
+  position       String?
+  jobDescription String?
+
   // --- License --------------------------------------------------------------
   licenseType           String?    // Employee / Vendor / Key / Other
   licenseNumber         String?
@@ -352,7 +375,7 @@ model Person {
 
   // --- Application & Status ---------------------------------------------------
   applicationDate           DateTime?
-  applicationStatus         String?   // Received / Under Review / Additional Info Needed / Accepted / Rejected / Closed
+  applicationStatus         LicensingApplicationStatus?
   backgroundStatus          String?   // Not Started / In Review / Approved / Denied / Needs Info
   suitabilityDetermination  String?   // Pending / Suitable / Unsuitable
 
@@ -370,14 +393,39 @@ model Person {
   updatedAt      DateTime  @updatedAt
 }
 
+// Fixed 11-slot Licensing document checklist (R6), plus BACKGROUND_CHECK —
+// rendered as its own labeled box rather than a checklist grid slot (see
+// BACKGROUND_CHECK_SLOT in src/lib/document-slots.ts) and reserved as the
+// only slot a future background-check vendor integration may write to
+// (see addBackgroundCheckDocumentAction in src/lib/actions/people.ts).
+// Nullable so the field doesn't force a backfill and an Applicant Portal
+// submission with no Licensing-assigned category still has somewhere to live.
+enum DocumentSlot {
+  APPLICATION
+  ID_PHOTO
+  SSN_CARD
+  CRIMINAL_HISTORY
+  FINGERPRINTS
+  INVESTIGATIVE_REPORT
+  SUITABILITY_REPORT
+  NOTICE_OF_RESULTS
+  NO_OBJECTION_LETTER
+  LICENSE_ISSUANCE
+  NIGC_RECEIPT
+  BACKGROUND_CHECK
+  LICENSING_ACTIONS
+  SEPARATION_NOTICE
+}
+
 model PersonDocument {
-  id        String    @id @default(cuid())
+  id        String        @id @default(cuid())
   personId  String
-  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person    Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
   name      String
+  slot      DocumentSlot?
   blobUrl   String?
   date      DateTime?
-  submitted Boolean   @default(true)
+  submitted Boolean       @default(true)
 }
 
 model PersonHistory {

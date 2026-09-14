@@ -6,6 +6,7 @@ import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
 import { preparePhoto } from "@/lib/image-client";
+import { PhotoAdjuster } from "@/components/photo-adjuster";
 import { createExclusionAction, updateExclusionAction, uploadExclusionPhotoAction, addExclusionDocumentAction, deleteExclusionDocumentAction, archiveExclusionAction, unarchiveExclusionAction } from "@/lib/actions/exclusions";
 
 export type ExclusionViewItem = {
@@ -62,6 +63,9 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
   const [editExpirationDate, setEditExpirationDate] = useState("");
   const [editRestrictions, setEditRestrictions] = useState("");
   const [editSourceInitiated, setEditSourceInitiated] = useState("");
+  // Holds a freshly-picked photo while the operator centers the face in the
+  // adjuster, before it's cropped and handed to the upload action.
+  const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
   const [personName, setPersonName] = useState("");
   const [aliases, setAliases] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -125,12 +129,20 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !selected) return;
+    setAdjustingPhoto(file);
+  };
+
+  const cancelPhotoAdjust = () => setAdjustingPhoto(null);
+
+  const confirmPhotoAdjust = (cropped: File) => {
+    setAdjustingPhoto(null);
+    if (!selected) return;
 
     startTransition(async () => {
       try {
         // Downscale before sending: a camera photo exceeds the server action
         // body limit and would be rejected before reaching the upload code.
-        const prepared = await preparePhoto(file);
+        const prepared = await preparePhoto(cropped);
         const formData = new FormData();
         formData.set("file", prepared);
 
@@ -671,6 +683,10 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
           </div>
         </div>
       </ResponsiveOverlay>
+
+      {adjustingPhoto && (
+        <PhotoAdjuster file={adjustingPhoto} onCancel={cancelPhotoAdjust} onConfirm={confirmPhotoAdjust} />
+      )}
     </div>
   );
 }

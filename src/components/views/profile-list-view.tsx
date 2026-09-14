@@ -6,7 +6,12 @@ import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { preparePhoto } from "@/lib/image-client";
-import { createPersonAction, uploadPersonPhotoAction, addPersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
+import { PhotoAdjuster } from "@/components/photo-adjuster";
+import { DocumentChecklist, DocumentSlotCard, type ChecklistDocument } from "@/components/document-checklist";
+import { NoObjectionFanout } from "@/components/no-objection-fanout";
+import { BACKGROUND_CHECK_SLOT, type DocumentSlot } from "@/lib/document-slots";
+import { LICENSING_STATUSES, licensingStatusLabel, isCriticalPipeline, isComplianceFlag, hasLicensingActions, type LicensingApplicationStatus } from "@/lib/licensing-status";
+import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
 
 export type ProfileViewItem = {
   id: string;
@@ -16,12 +21,14 @@ export type ProfileViewItem = {
   photoUrl?: string | null;
   dateOfBirth?: string | null;
   contactInfo?: string | null;
+  position?: string | null;
+  jobDescription?: string | null;
   licenseType?: string | null;
   licenseNumber?: string | null;
   licenseIssueDate?: string | null;
   licenseExpirationDate?: string | null;
   applicationDate?: string | null;
-  applicationStatus?: string | null;
+  applicationStatus?: LicensingApplicationStatus | null;
   backgroundStatus?: string | null;
   suitabilityDetermination?: string | null;
   assignedInvestigator?: string | null;
@@ -35,7 +42,7 @@ export type ProfileViewItem = {
   archivedBy?: string | null;
   restoredAt?: string | null;
   restoredBy?: string | null;
-  documents: { id: string; name: string; date: string | null }[];
+  documents: ChecklistDocument[];
   history: { id: string; date: string; event: string }[];
 };
 
@@ -45,9 +52,12 @@ const STAMP_CLASS: Record<string, string> = { cleared: "stamp-verified", flagged
 const STAMP_TEXT: Record<string, string> = { cleared: "License Issued", flagged: "Review Required", investigation: "In Progress" };
 
 const LICENSE_TYPE_OPTIONS = ["Employee", "Vendor", "Key", "Other"];
-const APPLICATION_STATUS_OPTIONS = ["Received", "Under Review", "Additional Info Needed", "Accepted", "Rejected", "Closed"];
 const BACKGROUND_STATUS_OPTIONS = ["Not Started", "In Review", "Approved", "Denied", "Needs Info"];
 const SUITABILITY_OPTIONS = ["Pending", "Suitable", "Unsuitable"];
+
+function initials(name: string): string {
+  return name.split(" ").map((w) => w[0]).join("");
+}
 
 export function ProfileListView({ people, showArchived }: { people: ProfileViewItem[]; showArchived: boolean }) {
   const variant = useShellVariant();
@@ -58,17 +68,54 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   // Holds the id being confirmed. Cleared whenever the drawer opens or closes
   // so a record can never appear pre-armed when it is reopened.
   const [confirmingArchive, setConfirmingArchive] = useState<string | null>(null);
+  // Holds the id being edited. Cleared whenever the drawer opens or closes,
+  // same reasoning as confirmingArchive above.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState("");
+  const [editPersonStatus, setEditPersonStatus] = useState("investigation");
+  const [editDateOfBirth, setEditDateOfBirth] = useState("");
+  const [editContactInfo, setEditContactInfo] = useState("");
+  const [editPosition, setEditPosition] = useState("");
+  const [editJobDescription, setEditJobDescription] = useState("");
+  const [editLicenseType, setEditLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
+  const [editLicenseNumber, setEditLicenseNumber] = useState("");
+  const [editLicenseIssueDate, setEditLicenseIssueDate] = useState("");
+  const [editLicenseExpirationDate, setEditLicenseExpirationDate] = useState("");
+  const [editApplicationDate, setEditApplicationDate] = useState("");
+  const [editApplicationStatus, setEditApplicationStatus] = useState<LicensingApplicationStatus>(LICENSING_STATUSES[0].key);
+  const [editBackgroundStatus, setEditBackgroundStatus] = useState(BACKGROUND_STATUS_OPTIONS[0]);
+  const [editSuitabilityDetermination, setEditSuitabilityDetermination] = useState(SUITABILITY_OPTIONS[0]);
+  const [editAssignedInvestigator, setEditAssignedInvestigator] = useState("");
+  const [editInvestigationStartDate, setEditInvestigationStartDate] = useState("");
+  const [editInvestigationCompletionDate, setEditInvestigationCompletionDate] = useState("");
+  const [editKeyFindings, setEditKeyFindings] = useState("");
+  // Holds a freshly-picked photo while the operator centers the face in the
+  // adjuster, before it's cropped and handed to the upload action.
+  const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
+  const [showFanout, setShowFanout] = useState(false);
+  // "ALL", "CRITICAL_PIPELINE", "COMPLIANCE", and "LICENSING_ACTIONS" are
+  // folder tabs alongside the status values — the latter three are computed
+  // smart folders (see isCriticalPipeline / isComplianceFlag /
+  // hasLicensingActions), never statuses a profile actually holds, so a
+  // profile can appear in any combination of them and its status folder at
+  // the same time.
+  const [activeFolder, setActiveFolder] = useState<
+    "ALL" | "CRITICAL_PIPELINE" | "COMPLIANCE" | "LICENSING_ACTIONS" | LicensingApplicationStatus
+  >("ALL");
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [personStatus, setPersonStatus] = useState("investigation");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [contactInfo, setContactInfo] = useState("");
+  const [position, setPosition] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
   const [licenseType, setLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
   const [licenseNumber, setLicenseNumber] = useState("");
   const [licenseIssueDate, setLicenseIssueDate] = useState("");
   const [licenseExpirationDate, setLicenseExpirationDate] = useState("");
   const [applicationDate, setApplicationDate] = useState("");
-  const [applicationStatus, setApplicationStatus] = useState(APPLICATION_STATUS_OPTIONS[0]);
+  const [applicationStatus, setApplicationStatus] = useState<LicensingApplicationStatus>(LICENSING_STATUSES[0].key);
   const [backgroundStatus, setBackgroundStatus] = useState(BACKGROUND_STATUS_OPTIONS[0]);
   const [suitabilityDetermination, setSuitabilityDetermination] = useState(SUITABILITY_OPTIONS[0]);
   const [assignedInvestigator, setAssignedInvestigator] = useState("");
@@ -76,11 +123,18 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
   const [investigationCompletionDate, setInvestigationCompletionDate] = useState("");
   const [keyFindings, setKeyFindings] = useState("");
   const [pending, startTransition] = useTransition();
-  const fileInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const showToast = useToast();
   const person = people.find((p) => p.id === selected);
+
+  const visiblePeople = people.filter((p) => {
+    if (activeFolder === "ALL") return true;
+    if (activeFolder === "CRITICAL_PIPELINE") return isCriticalPipeline(p.documents, p.applicationStatus);
+    if (activeFolder === "COMPLIANCE") return isComplianceFlag(p.documents);
+    if (activeFolder === "LICENSING_ACTIONS") return hasLicensingActions(p.documents);
+    return p.applicationStatus === activeFolder;
+  });
 
   const resetForm = () => {
     setName("");
@@ -88,12 +142,14 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     setPersonStatus("investigation");
     setDateOfBirth("");
     setContactInfo("");
+    setPosition("");
+    setJobDescription("");
     setLicenseType(LICENSE_TYPE_OPTIONS[0]);
     setLicenseNumber("");
     setLicenseIssueDate("");
     setLicenseExpirationDate("");
     setApplicationDate("");
-    setApplicationStatus(APPLICATION_STATUS_OPTIONS[0]);
+    setApplicationStatus(LICENSING_STATUSES[0].key);
     setBackgroundStatus(BACKGROUND_STATUS_OPTIONS[0]);
     setSuitabilityDetermination(SUITABILITY_OPTIONS[0]);
     setAssignedInvestigator("");
@@ -115,6 +171,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
           status: personStatus,
           dateOfBirth,
           contactInfo: contactInfo.trim(),
+          position: position.trim(),
+          jobDescription: jobDescription.trim(),
           licenseType,
           licenseNumber: licenseNumber.trim(),
           licenseIssueDate,
@@ -142,12 +200,20 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !selected) return;
+    setAdjustingPhoto(file);
+  };
+
+  const cancelPhotoAdjust = () => setAdjustingPhoto(null);
+
+  const confirmPhotoAdjust = (cropped: File) => {
+    setAdjustingPhoto(null);
+    if (!selected) return;
 
     startTransition(async () => {
       try {
         // Downscale before sending: a camera photo exceeds the server action
         // body limit and would be rejected before reaching the upload code.
-        const prepared = await preparePhoto(file);
+        const prepared = await preparePhoto(cropped);
         const formData = new FormData();
         formData.set("file", prepared);
 
@@ -166,23 +232,20 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !selected) return;
-
+  const uploadDocumentToSlot = (slot: DocumentSlot, file: File) => {
+    if (!selected) return;
     const formData = new FormData();
     formData.set("file", file);
 
     startTransition(async () => {
       try {
-        const { storage } = await addPersonDocumentAction(selected, formData);
+        const { storage } = await addPersonDocumentAction(selected, slot, formData);
         showToast(
           storage === "uploaded"
-            ? `Document "${file.name}" attached`
+            ? "Document attached"
             : storage === "skipped"
-              ? `"${file.name}" recorded — file storage is not configured`
-              : `Upload failed — "${file.name}" recorded without the file`,
+              ? "Document recorded — file storage is not configured"
+              : "Upload failed — document recorded without the file",
         );
         router.refresh();
       } catch {
@@ -191,22 +254,105 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
     });
   };
 
-  const deleteDocument = (documentId: string) => {
+  const replaceDocument = (documentId: string, file: File) => {
+    const formData = new FormData();
+    formData.set("file", file);
+
     startTransition(async () => {
-      await deletePersonDocumentAction(documentId);
-      showToast("Document removed");
-      router.refresh();
+      try {
+        const { storage } = await replacePersonDocumentAction(documentId, formData);
+        showToast(storage === "uploaded" ? "File replaced" : "File replaced — storage is not configured");
+        router.refresh();
+      } catch {
+        showToast("Failed to replace document");
+      }
+    });
+  };
+
+  const removeDocument = (documentId: string) => {
+    startTransition(async () => {
+      try {
+        await deletePersonDocumentAction(documentId);
+        showToast("Document removed");
+        router.refresh();
+      } catch {
+        showToast("Failed to remove document");
+      }
     });
   };
 
   const openRecord = (id: string) => {
     setConfirmingArchive(null);
+    setEditingId(null);
     setSelected(id);
   };
 
   const closeRecord = () => {
     setConfirmingArchive(null);
+    setEditingId(null);
     setSelected(null);
+  };
+
+  const startEdit = (p: ProfileViewItem) => {
+    setEditName(p.name);
+    setEditRole(p.role);
+    setEditPersonStatus(p.status);
+    setEditDateOfBirth(p.dateOfBirth ?? "");
+    setEditContactInfo(p.contactInfo ?? "");
+    setEditPosition(p.position ?? "");
+    setEditJobDescription(p.jobDescription ?? "");
+    setEditLicenseType(p.licenseType ?? LICENSE_TYPE_OPTIONS[0]);
+    setEditLicenseNumber(p.licenseNumber ?? "");
+    setEditLicenseIssueDate(p.licenseIssueDate ?? "");
+    setEditLicenseExpirationDate(p.licenseExpirationDate ?? "");
+    setEditApplicationDate(p.applicationDate ?? "");
+    setEditApplicationStatus(p.applicationStatus ?? LICENSING_STATUSES[0].key);
+    setEditBackgroundStatus(p.backgroundStatus ?? BACKGROUND_STATUS_OPTIONS[0]);
+    setEditSuitabilityDetermination(p.suitabilityDetermination ?? SUITABILITY_OPTIONS[0]);
+    setEditAssignedInvestigator(p.assignedInvestigator ?? "");
+    setEditInvestigationStartDate(p.investigationStartDate ?? "");
+    setEditInvestigationCompletionDate(p.investigationCompletionDate ?? "");
+    setEditKeyFindings(p.keyFindings ?? "");
+    setEditingId(p.id);
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
+  const saveEdit = () => {
+    if (!editName.trim() || !editRole.trim()) {
+      showToast("Full legal name and role are required");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await updatePersonAction(editingId!, {
+          name: editName.trim(),
+          role: editRole.trim(),
+          status: editPersonStatus,
+          dateOfBirth: editDateOfBirth,
+          contactInfo: editContactInfo.trim(),
+          position: editPosition.trim(),
+          jobDescription: editJobDescription.trim(),
+          licenseType: editLicenseType,
+          licenseNumber: editLicenseNumber.trim(),
+          licenseIssueDate: editLicenseIssueDate,
+          licenseExpirationDate: editLicenseExpirationDate,
+          applicationDate: editApplicationDate,
+          applicationStatus: editApplicationStatus,
+          backgroundStatus: editBackgroundStatus,
+          suitabilityDetermination: editSuitabilityDetermination,
+          assignedInvestigator: editAssignedInvestigator.trim(),
+          investigationStartDate: editInvestigationStartDate,
+          investigationCompletionDate: editInvestigationCompletionDate,
+          keyFindings: editKeyFindings.trim(),
+        });
+        setEditingId(null);
+        showToast("Profile updated");
+        router.refresh();
+      } catch {
+        showToast("Failed to update profile");
+      }
+    });
   };
 
   const archive = () => {
@@ -246,7 +392,6 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
 
   return (
     <div>
-      <input ref={fileInput} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
       <input ref={photoInput} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhotoUpload} />
 
       <div className="view-head">
@@ -259,20 +404,72 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
             {showArchived ? "Show Active" : "Show Archived"}
           </button>
           {variant === "desktop" && !showArchived && (
-            <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Profile</button>
+            <>
+              <button className="btn" onClick={() => setShowFanout(true)}>Send No-Objection Letter</button>
+              <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Profile</button>
+            </>
           )}
         </div>
       </div>
 
+      <div className="folder-tabs">
+        <button className={`folder-tab${activeFolder === "ALL" ? " folder-tab-active" : ""}`} onClick={() => setActiveFolder("ALL")}>
+          All <span className="folder-tab-count">{people.length}</span>
+        </button>
+        {LICENSING_STATUSES.map((s) => (
+          <button
+            key={s.key}
+            className={`folder-tab${activeFolder === s.key ? " folder-tab-active" : ""}`}
+            onClick={() => setActiveFolder(s.key)}
+          >
+            {s.label} <span className="folder-tab-count">{people.filter((p) => p.applicationStatus === s.key).length}</span>
+          </button>
+        ))}
+        <button
+          className={`folder-tab folder-tab-smart${activeFolder === "CRITICAL_PIPELINE" ? " folder-tab-active" : ""}`}
+          onClick={() => setActiveFolder("CRITICAL_PIPELINE")}
+          title="No-Objection done but NIGC receipt missing, Approved but awaiting No-Objection, or ready for Issuance"
+        >
+          ⚠ Critical Pipeline{" "}
+          <span className="folder-tab-count">{people.filter((p) => isCriticalPipeline(p.documents, p.applicationStatus)).length}</span>
+        </button>
+        <button
+          className={`folder-tab folder-tab-compliance${activeFolder === "COMPLIANCE" ? " folder-tab-active" : ""}`}
+          onClick={() => setActiveFolder("COMPLIANCE")}
+          title="Fingerprints on file without Notice of Results, or ready for Issuance"
+        >
+          ◆ Compliance <span className="folder-tab-count">{people.filter((p) => isComplianceFlag(p.documents)).length}</span>
+        </button>
+        <button
+          className={`folder-tab folder-tab-actions${activeFolder === "LICENSING_ACTIONS" ? " folder-tab-active" : ""}`}
+          onClick={() => setActiveFolder("LICENSING_ACTIONS")}
+          title="Profiles with at least one Licensing Actions file"
+        >
+          ▤ Licensing Actions <span className="folder-tab-count">{people.filter((p) => hasLicensingActions(p.documents)).length}</span>
+        </button>
+      </div>
+
       <div className="profiles">
-        {people.length === 0 && (
+        {visiblePeople.length === 0 && (
           <div className="field-label" style={{ padding: 16 }}>
-            {showArchived ? "No archived profiles." : "No active profiles."}
+            {people.length === 0
+              ? showArchived
+                ? "No archived profiles."
+                : "No active profiles."
+              : "No profiles in this folder."}
           </div>
         )}
-        {people.map((p) => (
+        {visiblePeople.map((p) => (
           <button key={p.id} className="profile-row" onClick={() => openRecord(p.id)}>
-            <div className="avatar">{p.name.split(" ").map((w) => w[0]).join("")}</div>
+            {p.photoUrl ? (
+              // Plain <img>: the source is either a blob URL or an inline
+              // data URL, and next/image handles neither without extra
+              // remote-pattern configuration.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="avatar-photo" src={p.photoUrl} alt="" />
+            ) : (
+              <div className="avatar">{initials(p.name)}</div>
+            )}
             <div><div className="p-name">{p.name}</div><div className="p-id">{p.id}</div></div>
             <div className="p-id">
               {showArchived ? `Archived ${p.archivedAt ?? ""} by ${p.archivedBy || "—"}` : p.role}
@@ -284,7 +481,12 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
       </div>
 
       <ResponsiveOverlay open={!!selected} onClose={closeRecord}>
-        {person && (
+        {person && (() => {
+          // Re-derived from the current record (not just editingId) so a
+          // profile archived out from under an open edit immediately drops
+          // back to view-only instead of leaving stale inputs on screen.
+          const isEditing = editingId === person.id && !person.archived;
+          return (
           <>
             <div className="drawer-head">
               <div>
@@ -320,56 +522,249 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
                 {person.photoUrl ? "Update Photo" : "+ Add Photo"}
               </button>
 
+              {!person.archived && (
+                <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                  {isEditing ? (
+                    <>
+                      <button className="btn btn-primary" disabled={pending} onClick={saveEdit}>
+                        Save Changes
+                      </button>
+                      <button className="btn" disabled={pending} onClick={cancelEdit}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn" disabled={pending} onClick={() => startEdit(person)}>
+                      Edit Details
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="section-label" style={{ marginTop: 16 }}>Identification</div>
-              <div className="field-grid">
-                <div><div className="field-label">Profile ID</div><div className="field-value">{person.id}</div></div>
-                <div><div className="field-label">Category</div><div className="field-value" style={{ fontFamily: "var(--font-plex-sans)", fontSize: 12.5 }}>{person.role}</div></div>
-                <div><div className="field-label">Date of Birth</div><div className="field-value">{person.dateOfBirth || "—"}</div></div>
-                <div><div className="field-label">Contact Info</div><div className="field-value">{person.contactInfo || "—"}</div></div>
-              </div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">Full Legal Name</label>
+                    <input type="text" className="field-input" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Category</label>
+                    <input type="text" className="field-input" value={editRole} onChange={(e) => setEditRole(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Status</label>
+                    <select className="field-input" value={editPersonStatus} onChange={(e) => setEditPersonStatus(e.target.value)} disabled={pending}>
+                      <option value="cleared">Cleared</option>
+                      <option value="flagged">Flagged</option>
+                      <option value="investigation">Under Investigation</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Date of Birth</label>
+                    <input type="date" className="field-input" value={editDateOfBirth} onChange={(e) => setEditDateOfBirth(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Contact Info</label>
+                    <input type="text" className="field-input" value={editContactInfo} onChange={(e) => setEditContactInfo(e.target.value)} disabled={pending} />
+                  </div>
+                  <div><div className="field-label">Profile ID</div><div className="field-value">{person.id}</div></div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Profile ID</div><div className="field-value">{person.id}</div></div>
+                  <div><div className="field-label">Category</div><div className="field-value" style={{ fontFamily: "var(--font-plex-sans)", fontSize: 12.5 }}>{person.role}</div></div>
+                  <div><div className="field-label">Date of Birth</div><div className="field-value">{person.dateOfBirth || "—"}</div></div>
+                  <div><div className="field-label">Contact Info</div><div className="field-value">{person.contactInfo || "—"}</div></div>
+                </div>
+              )}
+
+              <div className="section-label">Position &amp; Job Description</div>
+              {isEditing ? (
+                <>
+                  <div className="field-grid">
+                    <div>
+                      <label className="field-label">Position</label>
+                      <input type="text" className="field-input" value={editPosition} onChange={(e) => setEditPosition(e.target.value)} disabled={pending} />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <label className="field-label">Job Description</label>
+                    <textarea className="field-input" rows={3} value={editJobDescription} onChange={(e) => setEditJobDescription(e.target.value)} disabled={pending} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="field-grid">
+                    <div><div className="field-label">Position</div><div className="field-value">{person.position || "—"}</div></div>
+                  </div>
+                  <div className="field-label" style={{ marginTop: 12 }}>Job Description</div>
+                  <div className="field-value">{person.jobDescription || "—"}</div>
+                </>
+              )}
+              {/* Held for the future static forms pass (Suitability determination,
+                  Notice of results, Issuance of license, Denial letter), whose
+                  prefill spec includes name/SSN/DOB/position — not built this pass. */}
+              <button
+                className="btn doc-vendor-order-btn"
+                disabled
+                title="Static forms (Suitability determination, Notice of results, Issuance of license, Denial letter) — planned, not yet built"
+                style={{ marginTop: 12 }}
+              >
+                Generate Forms — Coming Soon
+              </button>
 
               <div className="section-label">License</div>
-              <div className="field-grid">
-                <div><div className="field-label">License Type</div><div className="field-value">{person.licenseType || "—"}</div></div>
-                <div><div className="field-label">License Number</div><div className="field-value">{person.licenseNumber || "—"}</div></div>
-                <div><div className="field-label">Issue Date</div><div className="field-value">{person.licenseIssueDate || "—"}</div></div>
-                <div><div className="field-label">Expiration Date</div><div className="field-value">{person.licenseExpirationDate || "—"}</div></div>
-              </div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">License Type</label>
+                    <select className="field-input" value={editLicenseType} onChange={(e) => setEditLicenseType(e.target.value)} disabled={pending}>
+                      {LICENSE_TYPE_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">License Number</label>
+                    <input type="text" className="field-input" value={editLicenseNumber} onChange={(e) => setEditLicenseNumber(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Issue Date</label>
+                    <input type="date" className="field-input" value={editLicenseIssueDate} onChange={(e) => setEditLicenseIssueDate(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Expiration Date</label>
+                    <input type="date" className="field-input" value={editLicenseExpirationDate} onChange={(e) => setEditLicenseExpirationDate(e.target.value)} disabled={pending} />
+                  </div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">License Type</div><div className="field-value">{person.licenseType || "—"}</div></div>
+                  <div><div className="field-label">License Number</div><div className="field-value">{person.licenseNumber || "—"}</div></div>
+                  <div><div className="field-label">Issue Date</div><div className="field-value">{person.licenseIssueDate || "—"}</div></div>
+                  <div><div className="field-label">Expiration Date</div><div className="field-value">{person.licenseExpirationDate || "—"}</div></div>
+                </div>
+              )}
 
               <div className="section-label">Application &amp; Status</div>
-              <div className="field-grid">
-                <div><div className="field-label">Application Date</div><div className="field-value">{person.applicationDate || "—"}</div></div>
-                <div><div className="field-label">Application Status</div><div className="field-value">{person.applicationStatus || "—"}</div></div>
-                <div><div className="field-label">Background Status</div><div className="field-value">{person.backgroundStatus || "—"}</div></div>
-                <div><div className="field-label">Suitability Determination</div><div className="field-value">{person.suitabilityDetermination || "—"}</div></div>
-              </div>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">Application Date</label>
+                    <input type="date" className="field-input" value={editApplicationDate} onChange={(e) => setEditApplicationDate(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Status</label>
+                    <select
+                      className="field-input"
+                      value={editApplicationStatus}
+                      onChange={(e) => setEditApplicationStatus(e.target.value as LicensingApplicationStatus)}
+                      disabled={pending}
+                    >
+                      {LICENSING_STATUSES.map((s) => (
+                        <option key={s.key} value={s.key}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Background Status</label>
+                    <select className="field-input" value={editBackgroundStatus} onChange={(e) => setEditBackgroundStatus(e.target.value)} disabled={pending}>
+                      {BACKGROUND_STATUS_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Suitability Determination</label>
+                    <select className="field-input" value={editSuitabilityDetermination} onChange={(e) => setEditSuitabilityDetermination(e.target.value)} disabled={pending}>
+                      {SUITABILITY_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Application Date</div><div className="field-value">{person.applicationDate || "—"}</div></div>
+                  <div><div className="field-label">Status</div><div className="field-value">{licensingStatusLabel(person.applicationStatus)}</div></div>
+                  <div><div className="field-label">Background Status</div><div className="field-value">{person.backgroundStatus || "—"}</div></div>
+                  <div><div className="field-label">Suitability Determination</div><div className="field-value">{person.suitabilityDetermination || "—"}</div></div>
+                </div>
+              )}
 
               <div className="section-label">Investigation Tracking</div>
-              <div className="field-grid">
-                <div><div className="field-label">Assigned Investigator</div><div className="field-value">{person.assignedInvestigator || "—"}</div></div>
-                <div><div className="field-label">Investigation Start</div><div className="field-value">{person.investigationStartDate || "—"}</div></div>
-                <div><div className="field-label">Investigation Completion</div><div className="field-value">{person.investigationCompletionDate || "—"}</div></div>
-              </div>
-              <div className="field-label" style={{ marginTop: 12 }}>Key Findings</div>
-              <div className="field-value">{person.keyFindings || "—"}</div>
-
-              <div className="section-label">Attached Documents ({person.documents.length})</div>
-              {person.documents.map((d) => (
-                <div className="doc-row" key={d.id}>
-                  <span className="doc-icon">▤</span><span className="doc-name">{d.name}</span><span className="doc-meta">{d.date ?? "pending"}</span>
-                  <button
-                    className="doc-delete-btn"
-                    onClick={() => deleteDocument(d.id)}
-                    disabled={pending}
-                    title="Delete document"
-                  >
-                    ✕
-                  </button>
+              {isEditing ? (
+                <div className="field-grid">
+                  <div>
+                    <label className="field-label">Assigned Investigator</label>
+                    <input type="text" className="field-input" value={editAssignedInvestigator} onChange={(e) => setEditAssignedInvestigator(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Investigation Start</label>
+                    <input type="date" className="field-input" value={editInvestigationStartDate} onChange={(e) => setEditInvestigationStartDate(e.target.value)} disabled={pending} />
+                  </div>
+                  <div>
+                    <label className="field-label">Investigation Completion</label>
+                    <input type="date" className="field-input" value={editInvestigationCompletionDate} onChange={(e) => setEditInvestigationCompletionDate(e.target.value)} disabled={pending} />
+                  </div>
                 </div>
-              ))}
-              <button className="btn" disabled={pending} onClick={() => fileInput.current?.click()} style={{ marginTop: 12 }}>
-                + Attach Document
-              </button>
+              ) : (
+                <div className="field-grid">
+                  <div><div className="field-label">Assigned Investigator</div><div className="field-value">{person.assignedInvestigator || "—"}</div></div>
+                  <div><div className="field-label">Investigation Start</div><div className="field-value">{person.investigationStartDate || "—"}</div></div>
+                  <div><div className="field-label">Investigation Completion</div><div className="field-value">{person.investigationCompletionDate || "—"}</div></div>
+                </div>
+              )}
+
+              {isEditing ? (
+                <div style={{ marginTop: 12 }}>
+                  <label className="field-label">Key Findings</label>
+                  <textarea className="field-input" rows={3} value={editKeyFindings} onChange={(e) => setEditKeyFindings(e.target.value)} disabled={pending} />
+                </div>
+              ) : (
+                <>
+                  <div className="field-label" style={{ marginTop: 12 }}>Key Findings</div>
+                  <div className="field-value">{person.keyFindings || "—"}</div>
+                </>
+              )}
+
+              <div className="section-label">Document Checklist</div>
+              <DocumentChecklist
+                documents={person.documents}
+                archived={person.archived}
+                pending={pending}
+                onUpload={uploadDocumentToSlot}
+                onReplace={replaceDocument}
+                onRemove={removeDocument}
+              />
+
+              <div className="section-label">Background Check</div>
+              <div className="doc-standalone">
+                <DocumentSlotCard
+                  label={BACKGROUND_CHECK_SLOT.label}
+                  critical={false}
+                  docs={person.documents.filter((d) => d.slot === "BACKGROUND_CHECK")}
+                  locked={null}
+                  archived={person.archived}
+                  pending={pending}
+                  onUpload={(file) => uploadDocumentToSlot("BACKGROUND_CHECK", file)}
+                  onReplace={replaceDocument}
+                  onRemove={removeDocument}
+                  extra={
+                    !person.archived && (
+                      <button
+                        className="btn doc-vendor-order-btn"
+                        disabled
+                        title="Vendor integration not yet connected — this will let staff order a check directly from this box"
+                      >
+                        Order Background Check — Coming Soon
+                      </button>
+                    )
+                  }
+                />
+              </div>
+
               <div className="section-label">Investigation History</div>
               <div className="ledger">
                 {person.history.map((h) => (
@@ -411,7 +806,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
               </div>
             </div>
           </>
-        )}
+          );
+        })()}
       </ResponsiveOverlay>
 
       <ResponsiveOverlay open={showCreateForm} onClose={() => setShowCreateForm(false)}>
@@ -483,6 +879,32 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
             </div>
           </div>
 
+          <div className="section-label">Position &amp; Job Description</div>
+          <div className="field-grid">
+            <div>
+              <label className="field-label">Position</label>
+              <input
+                type="text"
+                placeholder="Optional"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                className="field-input"
+                disabled={pending}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className="field-label">Job Description</label>
+            <textarea
+              placeholder="Optional"
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              className="field-input"
+              rows={3}
+              disabled={pending}
+            />
+          </div>
+
           <div className="section-label">License</div>
           <div className="field-grid">
             <div>
@@ -544,15 +966,15 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
               />
             </div>
             <div>
-              <label className="field-label">Application Status</label>
+              <label className="field-label">Status</label>
               <select
                 value={applicationStatus}
-                onChange={(e) => setApplicationStatus(e.target.value)}
+                onChange={(e) => setApplicationStatus(e.target.value as LicensingApplicationStatus)}
                 className="field-input"
                 disabled={pending}
               >
-                {APPLICATION_STATUS_OPTIONS.map((o) => (
-                  <option key={o} value={o}>{o}</option>
+                {LICENSING_STATUSES.map((s) => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
                 ))}
               </select>
             </div>
@@ -640,6 +1062,12 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
           </div>
         </div>
       </ResponsiveOverlay>
+
+      {adjustingPhoto && (
+        <PhotoAdjuster file={adjustingPhoto} onCancel={cancelPhotoAdjust} onConfirm={confirmPhotoAdjust} />
+      )}
+
+      <NoObjectionFanout open={showFanout} onClose={() => setShowFanout(false)} people={people} />
     </div>
   );
 }

@@ -20,6 +20,8 @@ export default async function ProfilesPage({
         photoUrl: p.photoUrl,
         dateOfBirth: p.dateOfBirth ? p.dateOfBirth.toISOString().slice(0, 10) : null,
         contactInfo: p.contactInfo,
+        position: p.position,
+        jobDescription: p.jobDescription,
         licenseType: p.licenseType,
         licenseNumber: p.licenseNumber,
         licenseIssueDate: p.licenseIssueDate ? p.licenseIssueDate.toISOString().slice(0, 10) : null,
@@ -39,7 +41,13 @@ export default async function ProfilesPage({
         archivedBy: p.archivedBy,
         restoredAt: p.restoredAt ? p.restoredAt.toISOString().slice(0, 10) : null,
         restoredBy: p.restoredBy,
-        documents: p.documents.map((d) => ({ id: d.id, name: d.name, date: d.date ? d.date.toISOString().slice(0, 10) : null })),
+        documents: p.documents.map((d) => ({
+          id: d.id,
+          name: d.name,
+          date: d.date ? d.date.toISOString().slice(0, 10) : null,
+          slot: d.slot,
+          blobUrl: d.blobUrl,
+        })),
         history: p.history.map((h) => ({ id: h.id, date: h.date.toISOString().slice(0, 10), event: h.event })),
       }))}
     />
