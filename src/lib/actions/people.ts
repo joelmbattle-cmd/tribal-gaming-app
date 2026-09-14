@@ -28,6 +28,7 @@ export type PersonIntake = {
   investigationStartDate?: string;
   investigationCompletionDate?: string;
   keyFindings?: string;
+  vendorCompanyId?: string;
 };
 
 function toDateOrNull(value: string | undefined) {
@@ -57,11 +58,16 @@ export async function createPersonAction(intake: PersonIntake) {
       investigationStartDate: toDateOrNull(intake.investigationStartDate),
       investigationCompletionDate: toDateOrNull(intake.investigationCompletionDate),
       keyFindings: intake.keyFindings || null,
+      vendorCompanyId: intake.vendorCompanyId || null,
       createdBy: user.name,
       lastModifiedBy: user.name,
     },
   });
   revalidatePath("/licensing/profiles");
+  if (intake.vendorCompanyId) {
+    revalidatePath("/licensing/vendors");
+    revalidatePath(`/licensing/vendors/${intake.vendorCompanyId}`);
+  }
   return person;
 }
 

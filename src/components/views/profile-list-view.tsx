@@ -46,8 +46,8 @@ export type ProfileViewItem = {
   history: { id: string; date: string; event: string }[];
 };
 
-const STATUS_CHIP: Record<string, string> = { cleared: "chip-cleared", flagged: "chip-flagged", investigation: "chip-investigation" };
-const STATUS_LABEL: Record<string, string> = { cleared: "Cleared", flagged: "Flagged", investigation: "Under Investigation" };
+export const STATUS_CHIP: Record<string, string> = { cleared: "chip-cleared", flagged: "chip-flagged", investigation: "chip-investigation" };
+export const STATUS_LABEL: Record<string, string> = { cleared: "Cleared", flagged: "Flagged", investigation: "Under Investigation" };
 const STAMP_CLASS: Record<string, string> = { cleared: "stamp-verified", flagged: "stamp-flagged", investigation: "stamp-pending" };
 const STAMP_TEXT: Record<string, string> = { cleared: "License Issued", flagged: "Review Required", investigation: "In Progress" };
 
@@ -59,7 +59,21 @@ function initials(name: string): string {
   return name.split(" ").map((w) => w[0]).join("");
 }
 
-export function ProfileListView({ people, showArchived }: { people: ProfileViewItem[]; showArchived: boolean }) {
+export function ProfileListView({
+  people,
+  showArchived,
+  title,
+  subtitle,
+  vendorCompanyId,
+}: {
+  people: ProfileViewItem[];
+  showArchived: boolean;
+  /** Overrides the default "Person Profiles" heading — used when this view is reused for a vendor company's principals. */
+  title?: string;
+  subtitle?: string;
+  /** When set, a profile created from this list is linked to the given vendor company as one of its principals. */
+  vendorCompanyId?: string;
+}) {
   const variant = useShellVariant();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -185,6 +199,7 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
           investigationStartDate,
           investigationCompletionDate,
           keyFindings: keyFindings.trim(),
+          vendorCompanyId,
         });
         resetForm();
         setShowCreateForm(false);
@@ -396,8 +411,8 @@ export function ProfileListView({ people, showArchived }: { people: ProfileViewI
 
       <div className="view-head">
         <div>
-          <div className="view-title">{showArchived ? "Archived Person Profiles" : "Person Profiles"}</div>
-          <div className="view-sub">Click a profile to review documents and background investigation status.</div>
+          <div className="view-title">{showArchived ? `Archived ${title ?? "Person Profiles"}` : (title ?? "Person Profiles")}</div>
+          <div className="view-sub">{subtitle ?? "Click a profile to review documents and background investigation status."}</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={toggleShowArchived}>

@@ -21,6 +21,7 @@ function fakeDemoPhoto(bg: string): string {
 
 async function main() {
   console.log("Clearing existing data...");
+  await db.application.deleteMany();
   await db.mapSettings.deleteMany();
   await db.machineHistory.deleteMany();
   await db.machineDocument.deleteMany();
@@ -39,6 +40,7 @@ async function main() {
   await db.personDocument.deleteMany();
   await db.user.deleteMany();
   await db.person.deleteMany();
+  await db.vendorCompany.deleteMany();
 
   await db.mapSettings.create({ data: { id: 1, mapWidth: 1560 } });
 
@@ -403,6 +405,227 @@ async function main() {
           { date: new Date("2026-08-11"), event: "Background investigation opened" },
         ],
       },
+    },
+  });
+
+  // -------------------------------------------------------------------
+  // Vendor Licensing — vendor companies + principals
+  // -------------------------------------------------------------------
+  console.log("Seeding vendor companies and principals...");
+
+  const silverline = await db.vendorCompany.create({
+    data: {
+      id: "VEN-1001",
+      name: "Silverline Gaming Systems",
+      status: "cleared",
+      contactInfo: "(602) 555-0184 · licensing@silverlinegaming.example",
+      address: "4410 Industrial Pkwy, Tempe, AZ",
+      licenseType: "Manufacturer",
+      licenseNumber: "VL-2024-0091",
+      licenseIssueDate: new Date("2024-03-01"),
+      licenseExpirationDate: new Date("2027-03-01"),
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00301",
+      name: "Renee Castellanos",
+      role: "Vendor Principal — Chief Financial Officer",
+      status: "cleared",
+      vendorCompanyId: silverline.id,
+      dateOfBirth: new Date("1975-09-14"),
+      contactInfo: "r.castellanos@silverlinegaming.example",
+      licenseType: "Vendor",
+      licenseNumber: "VP-2024-1120",
+      licenseIssueDate: new Date("2024-03-01"),
+      licenseExpirationDate: new Date("2027-03-01"),
+      applicationDate: new Date("2024-01-10"),
+      applicationStatus: "APPROVED",
+      backgroundStatus: "Approved",
+      suitabilityDetermination: "Suitable",
+      assignedInvestigator: "T. Whitcombe",
+      investigationStartDate: new Date("2024-01-15"),
+      investigationCompletionDate: new Date("2024-02-20"),
+      keyFindings: "No disqualifying history found. Cleared for licensure.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      history: { create: [{ date: new Date("2024-02-20"), event: "Investigation completed — license issued" }] },
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00302",
+      name: "Marcus Ibe",
+      role: "Vendor Principal — Compliance Officer",
+      status: "investigation",
+      vendorCompanyId: silverline.id,
+      dateOfBirth: new Date("1982-01-30"),
+      contactInfo: "m.ibe@silverlinegaming.example",
+      licenseType: "Vendor",
+      applicationDate: new Date("2026-08-01"),
+      applicationStatus: "READY_TO_REVIEW",
+      backgroundStatus: "In Review",
+      suitabilityDetermination: "Pending",
+      assignedInvestigator: "T. Whitcombe",
+      investigationStartDate: new Date("2026-08-08"),
+      keyFindings: "Standard background review in progress.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      history: { create: [{ date: new Date("2026-08-08"), event: "Background investigation opened" }] },
+    },
+  });
+
+  const apex = await db.vendorCompany.create({
+    data: {
+      id: "VEN-1002",
+      name: "Apex Route Distribution",
+      status: "flagged",
+      contactInfo: "(480) 555-0173 · compliance@apexroute.example",
+      address: "912 Freight Way, Chandler, AZ",
+      licenseType: "Distributor",
+      licenseNumber: "VL-2025-0044",
+      licenseIssueDate: new Date("2025-05-12"),
+      licenseExpirationDate: new Date("2028-05-12"),
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+    },
+  });
+  await db.person.create({
+    data: {
+      id: "LIC-00303",
+      name: "Wanda Lipscomb",
+      role: "Vendor Principal — Owner",
+      status: "flagged",
+      vendorCompanyId: apex.id,
+      dateOfBirth: new Date("1970-04-22"),
+      contactInfo: "w.lipscomb@apexroute.example",
+      licenseType: "Vendor",
+      applicationDate: new Date("2025-05-01"),
+      applicationStatus: "APPLICATION_NOT_FINISHED",
+      backgroundStatus: "Needs Info",
+      suitabilityDetermination: "Pending",
+      assignedInvestigator: "R. Delgado",
+      investigationStartDate: new Date("2025-05-10"),
+      keyFindings: "Discrepancy flagged — prior licensing action in another jurisdiction. Awaiting explanation.",
+      createdBy: "Licensing Director (Demo)",
+      lastModifiedBy: "Licensing Director (Demo)",
+      history: { create: [{ date: new Date("2025-05-10"), event: "Discrepancy flagged during review" }] },
+    },
+  });
+
+  // -------------------------------------------------------------------
+  // Applications — invite-to-accept pipeline, seeded across progress states
+  // -------------------------------------------------------------------
+  console.log("Seeding applications...");
+
+  // "Need apps" — a principal Apex has invited but who hasn't submitted yet.
+  await db.application.create({
+    data: {
+      id: "APP-4001",
+      progress: "Invited",
+      name: "Tyrell Combs",
+      email: "t.combs@apexroute.example",
+      role: "Vendor Principal — Operations Manager",
+      vendorCompanyId: apex.id,
+      licenseType: "Vendor",
+      invitedBy: "Licensing Director (Demo)",
+      invitedAt: new Date("2026-09-02"),
+    },
+  });
+
+  // Individual applicant, submitted and awaiting an investigator's Accept/Reject.
+  await db.application.create({
+    data: {
+      id: "APP-4002",
+      progress: "Submitted",
+      name: "Sofia Marchetti",
+      email: "sofia.marchetti@example.com",
+      role: "Applicant — Gaming Employee",
+      dateOfBirth: new Date("1994-07-08"),
+      contactInfo: "(602) 555-0199",
+      licenseType: "Employee",
+      applicationDate: new Date("2026-08-25"),
+      applicationStatus: "APPLICATION_TURNED_IN",
+      backgroundStatus: "Not Started",
+      suitabilityDetermination: "Pending",
+      invitedBy: "Licensing Director (Demo)",
+      invitedAt: new Date("2026-08-20"),
+      submittedAt: new Date("2026-08-25"),
+    },
+  });
+
+  // Accepted — the licensee Person profile already exists, created from this
+  // application's own fields (nested create keeps the two in lockstep, same
+  // as what acceptApplicationAction does at runtime).
+  await db.application.create({
+    data: {
+      id: "APP-4003",
+      progress: "Accepted",
+      name: "Julian Frost",
+      email: "julian.frost@example.com",
+      role: "Applicant — Key Employee",
+      dateOfBirth: new Date("1987-12-02"),
+      contactInfo: "(602) 555-0166",
+      licenseType: "Key",
+      licenseNumber: "KE-2026-5502",
+      licenseIssueDate: new Date("2026-08-10"),
+      licenseExpirationDate: new Date("2028-08-10"),
+      applicationDate: new Date("2026-07-05"),
+      applicationStatus: "APPROVED",
+      backgroundStatus: "Approved",
+      suitabilityDetermination: "Suitable",
+      assignedInvestigator: "R. Delgado",
+      investigationStartDate: new Date("2026-07-10"),
+      investigationCompletionDate: new Date("2026-08-10"),
+      keyFindings: "No disqualifying history found. Cleared for licensure.",
+      invitedBy: "Licensing Director (Demo)",
+      invitedAt: new Date("2026-07-01"),
+      submittedAt: new Date("2026-07-05"),
+      acceptedAt: new Date("2026-08-10"),
+      acceptedBy: "Licensing Director (Demo)",
+      person: {
+        create: {
+          id: "LIC-00304",
+          name: "Julian Frost",
+          role: "Applicant — Key Employee",
+          status: "cleared",
+          dateOfBirth: new Date("1987-12-02"),
+          contactInfo: "(602) 555-0166",
+          licenseType: "Key",
+          licenseNumber: "KE-2026-5502",
+          licenseIssueDate: new Date("2026-08-10"),
+          licenseExpirationDate: new Date("2028-08-10"),
+          applicationDate: new Date("2026-07-05"),
+          applicationStatus: "APPROVED",
+          backgroundStatus: "Approved",
+          suitabilityDetermination: "Suitable",
+          assignedInvestigator: "R. Delgado",
+          investigationStartDate: new Date("2026-07-10"),
+          investigationCompletionDate: new Date("2026-08-10"),
+          keyFindings: "No disqualifying history found. Cleared for licensure.",
+          createdBy: "Licensing Director (Demo)",
+          lastModifiedBy: "Licensing Director (Demo)",
+          history: { create: [{ date: new Date("2026-08-10"), event: "Profile created from accepted application APP-4003" }] },
+        },
+      },
+    },
+  });
+
+  // Rejected — investigator declined the invite before it went anywhere.
+  await db.application.create({
+    data: {
+      id: "APP-4004",
+      progress: "Rejected",
+      name: "Brianna Cole",
+      email: "brianna.cole@example.com",
+      role: "Applicant — Key Employee",
+      licenseType: "Key",
+      invitedBy: "Licensing Director (Demo)",
+      invitedAt: new Date("2026-08-05"),
+      rejectedAt: new Date("2026-08-12"),
+      rejectedBy: "Licensing Director (Demo)",
     },
   });
 
