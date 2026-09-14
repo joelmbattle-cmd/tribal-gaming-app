@@ -6,6 +6,7 @@ import { uploadDocument } from "@/lib/blob";
 import { storePhoto } from "@/lib/photo";
 import { lockedReason, type DocumentSlot } from "@/lib/document-slots";
 import type { LicensingApplicationStatus } from "@/lib/licensing-status";
+import { resolveLicenseExpiration, addYears, DEFAULT_LICENSE_TERM_YEARS } from "@/lib/license-expiry";
 import { revalidatePath } from "next/cache";
 
 export type PersonIntake = {
@@ -37,6 +38,11 @@ function toDateOrNull(value: string | undefined) {
 
 export async function createPersonAction(intake: PersonIntake) {
   const user = await requireRole("LICENSING");
+  const licenseIssueDate = toDateOrNull(intake.licenseIssueDate);
+  // Renewal timeline (R? License Monitor): once a license is issued, default
+  // its expiration to +2 years unless the approver typed a specific one —
+  // any explicit value here always wins, of any length.
+  const licenseExpirationDate = resolveLicenseExpiration(licenseIssueDate, toDateOrNull(intake.licenseExpirationDate));
   const person = await db.person.create({
     data: {
       name: intake.name,
@@ -48,8 +54,8 @@ export async function createPersonAction(intake: PersonIntake) {
       jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
       licenseNumber: intake.licenseNumber || null,
-      licenseIssueDate: toDateOrNull(intake.licenseIssueDate),
-      licenseExpirationDate: toDateOrNull(intake.licenseExpirationDate),
+      licenseIssueDate,
+      licenseExpirationDate,
       applicationDate: toDateOrNull(intake.applicationDate),
       applicationStatus: intake.applicationStatus || null,
       backgroundStatus: intake.backgroundStatus || null,
@@ -103,6 +109,9 @@ export async function updatePersonAction(personId: string, intake: PersonUpdate)
   if (!existing) throw new Error("Person not found");
   if (existing.archived) throw new Error("Cannot edit an archived profile");
 
+  const licenseIssueDate = toDateOrNull(intake.licenseIssueDate);
+  const licenseExpirationDate = resolveLicenseExpiration(licenseIssueDate, toDateOrNull(intake.licenseExpirationDate));
+
   const person = await db.person.update({
     where: { id: personId },
     data: {
@@ -115,8 +124,8 @@ export async function updatePersonAction(personId: string, intake: PersonUpdate)
       jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
       licenseNumber: intake.licenseNumber || null,
-      licenseIssueDate: toDateOrNull(intake.licenseIssueDate),
-      licenseExpirationDate: toDateOrNull(intake.licenseExpirationDate),
+      licenseIssueDate,
+      licenseExpirationDate,
       applicationDate: toDateOrNull(intake.applicationDate),
       applicationStatus: intake.applicationStatus || null,
       backgroundStatus: intake.backgroundStatus || null,
@@ -164,7 +173,12 @@ export async function addPersonDocumentAction(personId: string, slot: DocumentSl
 
   const person = await db.person.findUnique({
     where: { id: personId },
-    select: { archived: true, documents: { select: { slot: true } } },
+    select: {
+      archived: true,
+      documents: { select: { slot: true } },
+      licenseIssueDate: true,
+      licenseExpirationDate: true,
+    },
   });
   if (!person) throw new Error("Person not found");
   // Archived profiles are view-only, and the results chain (Notice of
@@ -176,6 +190,19 @@ export async function addPersonDocumentAction(personId: string, slot: DocumentSl
   if (blocked) throw new Error(blocked);
 
   const upload = await uploadDocument(file, `people/${personId}/${slot.toLowerCase()}`);
+  const uploadDate = new Date();
+
+  // License Monitor (renewal timeline): filing the first Issuance of License
+  // document is "issuance completed" — default the license's expiration to
+  // +2 years from here, and backfill an issue date too if the approver
+  // hasn't set one via the License section yet. Only fires once (first such
+  // document) and only fills in what's still missing — an expiration the
+  // approver already set (any length) is left alone.
+  const isFirstIssuanceDoc = slot === "LICENSE_ISSUANCE" && !person.documents.some((d) => d.slot === "LICENSE_ISSUANCE");
+  const resolvedIssueDate = person.licenseIssueDate ?? uploadDate;
+  const licenseIssueDate = isFirstIssuanceDoc ? resolvedIssueDate : undefined;
+  const licenseExpirationDate =
+    isFirstIssuanceDoc && !person.licenseExpirationDate ? addYears(resolvedIssueDate, DEFAULT_LICENSE_TERM_YEARS) : undefined;
 
   const [doc] = await db.$transaction([
     db.personDocument.create({
@@ -186,10 +213,13 @@ export async function addPersonDocumentAction(personId: string, slot: DocumentSl
         blobUrl: upload.status === "uploaded" ? upload.url : null,
         // PersonDocument.date has no default in the schema, unlike its siblings;
         // without this every attached document renders as "pending" forever.
-        date: new Date(),
+        date: uploadDate,
       },
     }),
-    db.person.update({ where: { id: personId }, data: { lastModifiedBy: user.name } }),
+    db.person.update({
+      where: { id: personId },
+      data: { lastModifiedBy: user.name, licenseIssueDate, licenseExpirationDate },
+    }),
   ]);
 
   revalidatePath("/licensing/profiles");

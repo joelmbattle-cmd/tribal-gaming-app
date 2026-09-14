@@ -12,6 +12,7 @@ import { NoObjectionFanout } from "@/components/no-objection-fanout";
 import { BACKGROUND_CHECK_SLOT, type DocumentSlot } from "@/lib/document-slots";
 import { LICENSING_STATUSES, licensingStatusLabel, isCriticalPipeline, isComplianceFlag, hasLicensingActions, type LicensingApplicationStatus } from "@/lib/licensing-status";
 import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction } from "@/lib/actions/people";
+import { EXPIRY_STATUS_CHIP, EXPIRY_STATUS_LABEL, licenseExpiryStatus } from "@/lib/license-expiry";
 
 export type ProfileViewItem = {
   id: string;
@@ -658,7 +659,17 @@ export function ProfileListView({
                   <div><div className="field-label">License Type</div><div className="field-value">{person.licenseType || "—"}</div></div>
                   <div><div className="field-label">License Number</div><div className="field-value">{person.licenseNumber || "—"}</div></div>
                   <div><div className="field-label">Issue Date</div><div className="field-value">{person.licenseIssueDate || "—"}</div></div>
-                  <div><div className="field-label">Expiration Date</div><div className="field-value">{person.licenseExpirationDate || "—"}</div></div>
+                  <div>
+                    <div className="field-label">Expiration Date</div>
+                    <div className="field-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {person.licenseExpirationDate || "—"}
+                      {person.licenseExpirationDate && (
+                        <span className={`chip ${EXPIRY_STATUS_CHIP[licenseExpiryStatus(new Date(person.licenseExpirationDate))]}`}>
+                          {EXPIRY_STATUS_LABEL[licenseExpiryStatus(new Date(person.licenseExpirationDate))]}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
