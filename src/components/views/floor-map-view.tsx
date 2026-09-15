@@ -84,10 +84,14 @@ export function FloorMapView({
   const panRef = useRef({ x: panX, y: panY });
   const editModeRef = useRef(editMode);
   const placingBankRef = useRef(placingBank);
+  // Lets the document-level pan/drag effects below read the current area
+  // list without depending on it — see the [] deps note on those effects.
+  const areaListRef = useRef(areaList);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { panRef.current = { x: panX, y: panY }; }, [panX, panY]);
   useEffect(() => { editModeRef.current = editMode; }, [editMode]);
   useEffect(() => { placingBankRef.current = placingBank; }, [placingBank]);
+  useEffect(() => { areaListRef.current = areaList; }, [areaList]);
 
   const bankDragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const panDragRef = useRef<{ startX: number; startY: number; origPanX: number; origPanY: number } | null>(null);
@@ -125,16 +129,27 @@ export function FloorMapView({
   }
 
   function areaLabelForY(y: number) {
-    for (const a of areaList) {
+    // Reads via ref (not the areaList closure) so this stays correct when
+    // called from the document-level touch effect below, which registers
+    // its listeners once rather than re-subscribing on every area change.
+    const list = areaListRef.current;
+    for (const a of list) {
       if (y >= a.y && y < a.y + a.h) return a.label;
     }
-    return y < areaList[0].y ? areaList[0].label : areaList[areaList.length - 1].label;
+    return y < list[0].y ? list[0].label : list[list.length - 1].label;
   }
 
   function openBankPopoverAt(clientX: number, clientY: number) {
     const { x, y } = screenToCanvas(clientX, clientY);
+    // The 220px reserve was tuned against the popover's own height on
+    // desktop, which has no fixed bottom chrome to clear. On mobile it also
+    // needs to clear the tab bar + safe-area-bottom inset below the map (and
+    // land above the FAB row) so a bank placed near the bottom of the
+    // screen doesn't render its "Place Bank"/"Cancel" buttons underneath
+    // the tab bar, unreachable.
+    const bottomReserve = variant === "mobile" ? 350 : 220;
     const screenX = Math.min(clientX, window.innerWidth - 280);
-    const screenY = Math.min(clientY, window.innerHeight - 220);
+    const screenY = Math.max(10, Math.min(clientY, window.innerHeight - bottomReserve));
     setBankPopover({ canvasX: x, canvasY: y, screenX, screenY, areaLabel: areaLabelForY(y) });
   }
 
@@ -207,8 +222,15 @@ export function FloorMapView({
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
+    // Registered once: every closure above only ever reads state via a ref
+    // or a functional setState update, never the `banks` value directly, so
+    // there's nothing here that goes stale by not re-subscribing on every
+    // bank change. Depending on [banks] previously meant these listeners
+    // were torn down and re-added on every single pointermove while
+    // dragging a bank (each drag step calls setBanks) — pure churn that
+    // hurt drag responsiveness for no correctness benefit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [banks]);
+  }, []);
 
   async function commitDrag(d: { id: string; origX: number; origY: number }) {
     setBanks((current) => {
@@ -329,8 +351,15 @@ export function FloorMapView({
       viewport.removeEventListener("touchcancel", onTouchEnd);
       viewport.removeEventListener("wheel", onWheel);
     };
+    // Same reasoning as the mouse effect above: registered once. Pinch and
+    // pan already read zoom/pan via refs; the one closure that used to read
+    // area state directly (areaLabelForY, for the long-press bank-placement
+    // popover) now reads areaListRef too, so nothing here needs banks or
+    // areaList as a dependency. This was the effect actually responsible
+    // for touch drag/pinch feeling choppy — every bank-drag pointermove
+    // was tearing down and re-adding the touchmove listener mid-gesture.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [banks]);
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
