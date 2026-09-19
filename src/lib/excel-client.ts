@@ -41,12 +41,12 @@ export function downloadImportTemplate() {
   XLSX.writeFile(wb, "machine-import-template.xlsx");
 }
 
-export function exportRowsToExcel(rows: Record<string, unknown>[], filenamePrefix: string) {
+export function exportRowsToExcel(rows: Record<string, unknown>[], filenamePrefix: string, sheetName = "Machine Records") {
   if (!rows.length) return false;
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!cols"] = Object.keys(rows[0]).map((k) => ({ wch: Math.max(k.length + 2, 14) }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Machine Records");
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, `${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   return true;
 }

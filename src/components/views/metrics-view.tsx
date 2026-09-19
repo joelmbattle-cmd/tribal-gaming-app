@@ -1,6 +1,49 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import { useToast } from "@/components/toast";
+import { exportRowsToExcel } from "@/lib/excel-client";
+import {
+  getMachineActivityHistoryExportAction,
+  getLicensingCycleTimeExportAction,
+  getExclusionEnforcementLogExportAction,
+} from "@/lib/actions/reports";
+import type { Role } from "@/generated/prisma/enums";
+
+type ReportKey = "machines" | "licensing" | "exclusions";
+
+const REPORTS: Record<
+  ReportKey,
+  {
+    label: string;
+    role: Role;
+    filenamePrefix: string;
+    sheetName: string;
+    action: (dateFrom?: string, dateTo?: string) => Promise<Record<string, unknown>[]>;
+  }
+> = {
+  machines: {
+    label: "Machine activity history — full audit trail",
+    role: "COMPLIANCE",
+    filenamePrefix: "machine-activity-history",
+    sheetName: "Machine Activity History",
+    action: getMachineActivityHistoryExportAction,
+  },
+  licensing: {
+    label: "Licensing cycle time by case",
+    role: "LICENSING",
+    filenamePrefix: "licensing-cycle-time",
+    sheetName: "Licensing Cycle Time",
+    action: getLicensingCycleTimeExportAction,
+  },
+  exclusions: {
+    label: "Self-exclusion enforcement log",
+    role: "COMPLIANCE",
+    filenamePrefix: "self-exclusion-enforcement-log",
+    sheetName: "Enforcement Log",
+    action: getExclusionEnforcementLogExportAction,
+  },
+};
 
 export function MetricsView({
   avgVerifyDays,
@@ -13,6 +56,7 @@ export function MetricsView({
   totalProfiles,
   activeExclusions,
   totalExclusions,
+  role,
 }: {
   avgVerifyDays: number;
   openExceptions: number;
@@ -24,8 +68,30 @@ export function MetricsView({
   totalProfiles: number;
   activeExclusions: number;
   totalExclusions: number;
+  role: Role;
 }) {
   const showToast = useToast();
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [pendingReport, setPendingReport] = useState<ReportKey | null>(null);
+
+  const doExport = (key: ReportKey) => {
+    const report = REPORTS[key];
+    setPendingReport(key);
+    startTransition(async () => {
+      try {
+        const rows = await report.action(dateFrom || undefined, dateTo || undefined);
+        const ok = exportRowsToExcel(rows, report.filenamePrefix, report.sheetName);
+        showToast(ok ? `Exported ${rows.length} record${rows.length === 1 ? "" : "s"} to Excel` : "No records to export for the selected range");
+      } catch {
+        showToast("You don't have access to export this report");
+      } finally {
+        setPendingReport(null);
+      }
+    });
+  };
+
   return (
     <div>
       <div className="view-title">Metrics &amp; Reporting</div>
@@ -94,18 +160,34 @@ export function MetricsView({
       </div>
 
       <div className="section-label">Exportable Reports</div>
-      <div className="report-row">
-        <span>Machine activity history — full audit trail</span>
-        <button className="btn btn-small" onClick={() => showToast("Export prepared (demo)")}>Export</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <label className="field-label" style={{ margin: 0 }}>From</label>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="field-input" style={{ width: 160 }} />
+        <label className="field-label" style={{ margin: 0 }}>To</label>
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="field-input" style={{ width: 160 }} />
+        {(dateFrom || dateTo) && (
+          <button className="btn btn-small" onClick={() => { setDateFrom(""); setDateTo(""); }}>
+            Clear range
+          </button>
+        )}
       </div>
-      <div className="report-row">
-        <span>Licensing cycle time by case</span>
-        <button className="btn btn-small" onClick={() => showToast("Export prepared (demo)")}>Export</button>
-      </div>
-      <div className="report-row">
-        <span>Self-exclusion enforcement log</span>
-        <button className="btn btn-small" onClick={() => showToast("Export prepared (demo)")}>Export</button>
-      </div>
+      {(Object.keys(REPORTS) as ReportKey[]).map((key) => {
+        const report = REPORTS[key];
+        const allowed = report.role === role;
+        return (
+          <div className="report-row" key={key}>
+            <span>{report.label}</span>
+            <button
+              className="btn btn-small"
+              disabled={!allowed || pending}
+              title={allowed ? undefined : `${report.role === "COMPLIANCE" ? "Compliance" : "Licensing"} role only`}
+              onClick={() => doExport(key)}
+            >
+              {pending && pendingReport === key ? "Exporting…" : allowed ? "Export" : "Restricted"}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
