@@ -23,10 +23,10 @@ export async function logMapChange(changeType: string, bankName: string, areaLab
   }
 }
 
-async function ensureCanvasFits(x: number, y: number) {
+async function ensureCanvasFits(x: number, y: number, w: number = BANK_W) {
   const settings = await db.mapSettings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
-  if (x + BANK_W + 160 > settings.mapWidth) {
-    await db.mapSettings.update({ where: { id: 1 }, data: { mapWidth: x + BANK_W + 400 } });
+  if (x + w + 160 > settings.mapWidth) {
+    await db.mapSettings.update({ where: { id: 1 }, data: { mapWidth: x + w + 400 } });
   }
   const areas = await db.area.findMany({ orderBy: { order: "asc" } });
   const mapHeight = areas.reduce((h, a) => Math.max(h, a.y + a.h), 0);
@@ -97,7 +97,7 @@ export async function commitBankMoveAction(bankId: string, x: number, y: number)
   const areaChanged = newArea.id !== bank.areaId;
 
   await db.bank.update({ where: { id: bankId }, data: { x: clampedX, y: clampedY, areaId: newArea.id } });
-  await ensureCanvasFits(clampedX, clampedY);
+  await ensureCanvasFits(clampedX, clampedY, bank.w ?? BANK_W);
 
   await logMapChange(
     "Move Bank",
@@ -202,7 +202,7 @@ export async function shrinkZoneHeightAction(areaKey: string, amount: number = E
   const shrink = Math.round(amount);
 
   const contentBottom = area.banks.reduce(
-    (max, b) => Math.max(max, b.y - area.y + estimateBankHeight(b.capacity) + 24),
+    (max, b) => Math.max(max, b.y - area.y + (b.h ?? estimateBankHeight(b.capacity)) + 24),
     0,
   );
   const minHeight = Math.max(MIN_AREA_HEIGHT, contentBottom);
