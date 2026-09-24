@@ -29,6 +29,7 @@ async function main() {
   await db.shipmentMachine.deleteMany();
   await db.machine.deleteMany();
   await db.bank.deleteMany();
+  await db.floorPlan.deleteMany(); // imported CAD plans reference their Area
   await db.area.deleteMany();
   await db.shipmentRecipient.deleteMany();
   await db.shipmentField.deleteMany();

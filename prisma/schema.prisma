@@ -47,8 +47,8 @@ model MapSettings {
 }
 
 model Area {
-  id    String @id @default(cuid())
-  key   String @unique
+  id    String     @id @default(cuid())
+  key   String     @unique
   label String
   // y/h are display-layer state for the pannable/zoomable canvas. Kept
   // persisted (not derived) so the layout survives across demo sessions —
@@ -56,8 +56,32 @@ model Area {
   // on top of Area / Bank" is the resolution taken here, but persisted.
   y     Int
   h     Int
-  order Int    @default(0)
+  order Int        @default(0)
   banks Bank[]
+  // Set on the band created for an imported CAD floor plan (one plan per area).
+  plan  FloorPlan?
+}
+
+// A floor plan imported from AutoCAD (DXF). Lives in its own Area band below
+// the existing areas, so importing one never moves or replaces existing banks.
+// `outline` is a list of closed rings — [[x, y], ...] in canvas px, relative to
+// (originX, area.y + padding) so it stays attached when areas above are resized.
+// Rings are drawn even-odd, which is how courtyards / cut-outs are expressed.
+model FloorPlan {
+  id         String   @id @default(cuid())
+  name       String
+  sourceFile String   @default("")
+  units      String?
+  scale      Float    @default(1) // canvas px per drawing unit at import time
+  areaId     String   @unique
+  area       Area     @relation(fields: [areaId], references: [id])
+  originX    Int      @default(40)
+  width      Int
+  height     Int
+  outline    Json
+  banks      Bank[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Bank {
@@ -70,6 +94,21 @@ model Bank {
   capacity  Int
   machines  Machine[]
   createdAt DateTime  @default(now())
+
+  // Optional per-bank card size. Null keeps the default BANK_W look, so every
+  // pre-existing bank renders exactly as before. Set by CAD import (from the
+  // footprint) or by the manual resize control.
+  w         Int?
+  h         Int?
+  // Exact CAD footprint polygon, [[x, y], ...] relative to the card's top-left.
+  footprint Json?
+  planId    String?
+  plan      FloorPlan? @relation(fields: [planId], references: [id])
+  // Stable id within the plan (DXF handle or label) so re-importing an edited
+  // drawing updates banks in place instead of duplicating them.
+  cadRef    String?
+
+  @@unique([planId, cadRef])
 }
 
 enum ComplianceStatus {

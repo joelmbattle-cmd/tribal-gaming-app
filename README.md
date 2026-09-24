@@ -94,6 +94,43 @@ its pristine starting state (handy right before a sales call).
   template + legend tab (Serial Number match-in-place, auto-create unknown
   banks, auto-growing capacity)
 
+## Floor setup from AutoCAD + a slot spreadsheet
+
+Floor Map → **Floor Setup** (Compliance only) lets an agency build its real
+floor without touching the demo layout. It only ever *adds*: an imported floor
+gets its own band below the existing areas, and nothing already on the map is
+moved, replaced or deleted.
+
+1. **Floor plan (DXF).** Parsed in the browser with `dxf-parser`; the server
+   validates the geometry and applies it. The floor outline (irregular shapes,
+   courtyards, curved corners) is drawn as a vector, and every bank keeps its
+   exact footprint and position at a uniform scale. Re-uploading an edited
+   drawing with "Update floor plan" repositions banks in place.
+2. **Machines (Excel).** Columns are auto-detected and can be remapped; Bank
+   values that don't match a bank on the map can be assigned by hand. Machines
+   are matched by serial number, so re-importing updates instead of duplicating.
+3. **Resize fallback.** Edit Layout shows a corner handle on every bank; drag it
+   (mouse or touch) if a footprint needs a tweak. "Reset size" returns to the
+   footprint-derived size.
+
+**DXF assumptions (v1).** DWG is proprietary, so export with `SAVEAS → AutoCAD
+DXF`. One closed shape per bank on a bank layer (closed polyline, a loop of
+LINE/ARC segments, or a block instance — shapes nested inside a larger bank
+shape are ignored); text inside a shape names the bank. The floor outline is
+optional and, if absent, defaults to the banks' bounding box. Model-space 2D
+geometry only: splines, ellipses, hatches and 3D entities are skipped with a
+warning.
+
+**Excel assumptions.** The first row is headings. Only Serial Number and Bank
+are required; Seat, Asset Number, Manufacturer, Model, Game Theme, PAR Sheet,
+Seal Number, Compliance Status, Software Status, Status Since and Lifecycle
+Status are optional. A Bank cell matches a map bank by name, or — for
+CAD-imported banks only — by bare bank number ("104" or "Bank 104"). Seat
+numbers above a bank's capacity widen the bank.
+
+Every floor change is written to the Recent Map Changes log (`CAD Import`,
+`Import`, `Resize Bank`).
+
 ## Project structure
 
 ```
