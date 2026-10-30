@@ -5,7 +5,7 @@ export async function getVendorCompanyList(showArchived = false) {
     where: { archived: showArchived },
     orderBy: { name: "asc" },
     include: {
-      principals: { where: { archived: false } },
+      principals: { where: { archived: false }, select: { id: true, licenseExpirationDate: true } },
       applications: { where: { progress: { notIn: ["Accepted", "Rejected"] } } },
     },
   });

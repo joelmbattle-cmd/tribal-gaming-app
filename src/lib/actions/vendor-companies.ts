@@ -1,5 +1,6 @@
 "use server";
 
+import { VENDOR_STATUSES, DEFAULT_VENDOR_COMPANY_STATUS } from "@/lib/license-expiry";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
 import { resolveLicenseExpiration } from "@/lib/license-expiry";
@@ -30,7 +31,7 @@ export async function createVendorCompanyAction(intake: VendorCompanyIntake) {
   const company = await db.vendorCompany.create({
     data: {
       name: intake.name,
-      status: intake.status,
+      status: (VENDOR_STATUSES as readonly string[]).includes(intake.status) ? intake.status : DEFAULT_VENDOR_COMPANY_STATUS,
       contactInfo: intake.contactInfo || null,
       address: intake.address || null,
       licenseType: intake.licenseType || null,

@@ -25,6 +25,8 @@ export type VendorCompanyDetailItem = {
   archived: boolean;
   archivedAt?: string | null;
   archivedBy?: string | null;
+  activePrincipalCount?: number;
+  soonestExpiry?: string | null;
   createdBy?: string | null;
   lastModifiedBy?: string | null;
 };
@@ -60,6 +62,8 @@ export function VendorCompanyDetailView({
   const showToast = useToast();
   const [pending, startTransition] = useTransition();
   const { confirm, dialog } = useConfirm(pending);
+  const activePrincipalCount = company.activePrincipalCount ?? principals.length;
+  const soonest = company.soonestExpiry ?? null;
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(company.name);
   const [editStatus, setEditStatus] = useState(company.status);
@@ -171,7 +175,18 @@ export function VendorCompanyDetailView({
       <div className="view-head">
         <div>
           <div className="view-title">{company.name}</div>
-          <div className="view-sub">{company.id} · Vendor Licensing</div>
+          <div className="view-sub">
+            {company.id} · Vendor Licensing · {activePrincipalCount} principal{activePrincipalCount === 1 ? "" : "s"}
+            {" · Soonest expiry "}
+            {soonest ? (
+              <>
+                {soonest}{" "}
+                <span className={`chip ${EXPIRY_STATUS_CHIP[licenseExpiryStatus(new Date(soonest))]}`}>
+                  {EXPIRY_STATUS_LABEL[licenseExpiryStatus(new Date(soonest))]}
+                </span>
+              </>
+            ) : "—"}
+          </div>
         </div>
         <div>
           <span className={`chip ${STATUS_CHIP[company.status] ?? "chip-neutral"}`}>
