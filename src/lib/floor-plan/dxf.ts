@@ -228,17 +228,36 @@ export function parseDxfScene(text: string): DxfScene {
   for (const [what, n] of c.skipped) warnings.push(`Skipped ${n} unsupported ${what} entit${n === 1 ? "y" : "ies"}.`);
   if (c.segments > MAX_SEGMENTS) warnings.push("Drawing is very large — geometry beyond the first 400k segments was ignored.");
 
+  const unitCode = dxf.header?.["$INSUNITS"];
+  const units = typeof unitCode === "number" ? (INSUNITS[unitCode] ?? null) : null;
+  return buildScene(c.paths, c.texts, warnings, units, "No usable geometry was found in that DXF.");
+}
+
+export type RawPath = { layer: string; handle: string | null; points: Pt[]; closed: boolean };
+
+/**
+ * Shared back half of every CAD importer (DXF, vector PDF): closes rings,
+ * chains open line work per layer and tallies layers. Anything that produces
+ * layered paths + texts gets the exact same bank / seat / label pipeline.
+ */
+export function buildScene(
+  paths: RawPath[],
+  texts: TextItem[],
+  warnings: string[],
+  units: string | null,
+  emptyMessage: string,
+): DxfScene {
   // Extent-relative tolerance for joining line work drawn as separate segments.
   const all = emptyBounds();
-  for (const p of c.paths) for (const pt of p.points) extendBounds(all, pt);
+  for (const p of paths) for (const pt of p.points) extendBounds(all, pt);
   const extent = Math.max(all.maxX - all.minX, all.maxY - all.minY);
-  if (!Number.isFinite(extent) || extent <= 0) throw new Error("No usable geometry was found in that DXF.");
+  if (!Number.isFinite(extent) || extent <= 0) throw new Error(emptyMessage);
   const tol = extent * 1e-5;
 
   // Closed polylines/circles are rings already; open paths are chained per layer.
   const rings: Shape[] = [];
   const openByLayer = new Map<string, Pt[][]>();
-  for (const p of c.paths) {
+  for (const p of paths) {
     if (p.closed) {
       const ring = cleanRing(p.points);
       if (ring.length >= 3 && Math.abs(polygonArea(ring)) > tol * tol) rings.push({ layer: p.layer, handle: p.handle, points: ring });
@@ -265,17 +284,16 @@ export function parseDxfScene(text: string): DxfScene {
   };
   for (const r of rings) info(r.layer).rings++;
   for (const [layer, n] of openCount) info(layer).openPaths = n;
-  for (const t of c.texts) info(t.layer).texts++;
+  for (const t of texts) info(t.layer).texts++;
 
   const bounds = emptyBounds();
   for (const r of rings) for (const p of r.points) extendBounds(bounds, p);
 
-  const unitCode = dxf.header?.["$INSUNITS"];
   return {
-    units: typeof unitCode === "number" ? (INSUNITS[unitCode] ?? null) : null,
+    units,
     layers: [...layerMap.values()].sort((a, b) => b.rings - a.rings || a.name.localeCompare(b.name)),
     rings,
-    texts: c.texts,
+    texts,
     warnings,
     bounds,
   };
