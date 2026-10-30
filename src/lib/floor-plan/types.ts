@@ -18,6 +18,8 @@ export const MAX_PLAN_DIM = 20000;
 export const DEFAULT_PLAN_WIDTH = 3200;
 /** Padding between an imported plan's area band edge and the drawing. */
 export const PLAN_PAD = 24;
+/** Minimum clear space kept between imported bank cards. */
+export const BANK_GUTTER = 16;
 
 export type PlanBankPayload = {
   /** Stable id within the plan (DXF handle, else lower-cased label) — lets a re-import update instead of duplicate. */
