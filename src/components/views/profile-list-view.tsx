@@ -547,15 +547,15 @@ export function ProfileListView({
           const expiry = person.licenseExpirationDate ? licenseExpiryStatus(new Date(person.licenseExpirationDate)) : null;
           return (
           <>
-            <div className="drawer-head">
             <div className="drawer-sticky">
-              <div>
-                <div className="drawer-eyebrow">Licensing Profile</div>
-                <div className="drawer-title">{person.name}</div>
-                <div className="p-id" style={{ marginTop: 4 }}>{person.id} · {person.role}</div>
+              <div className="drawer-head">
+                <div>
+                  <div className="drawer-eyebrow">Licensing Profile</div>
+                  <div className="drawer-title">{person.name}</div>
+                  <div className="p-id" style={{ marginTop: 4 }}>{person.id} · {person.role}</div>
+                </div>
+                <button className="drawer-close" onClick={closeRecord}>✕</button>
               </div>
-              <button className="drawer-close" onClick={closeRecord}>✕</button>
-            </div>
               <div className="case-card">
                 {person.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
