@@ -60,7 +60,6 @@ export function VendorCompanyDetailView({
   const showToast = useToast();
   const [pending, startTransition] = useTransition();
   const { confirm, dialog } = useConfirm(pending);
-  const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(company.name);
   const [editStatus, setEditStatus] = useState(company.status);
@@ -115,7 +114,6 @@ export function VendorCompanyDetailView({
     startTransition(async () => {
       try {
         await archiveVendorCompanyAction(company.id);
-        setConfirmingArchive(false);
         showToast("Vendor company archived");
         router.push("/licensing/vendors");
       } catch {
@@ -260,13 +258,12 @@ export function VendorCompanyDetailView({
             )}
             {company.archived ? (
               <button className="btn btn-primary" disabled={pending} onClick={unarchive}>Restore Company</button>
-            ) : confirmingArchive ? (
-              <>
-                <button className="btn btn-danger" disabled={pending} onClick={archive}>Confirm Archive</button>
-                <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(false)}>Cancel</button>
-              </>
             ) : (
-              <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(true)}>Archive Company</button>
+              <button
+                className="btn"
+                disabled={pending}
+                onClick={() => confirm({ title: "Archive this vendor company?", description: "Archiving removes this company from the active vendor list. It can be restored later.", confirmLabel: "Archive", danger: true }, archive)}
+              >Archive Company</button>
             )}
           </div>
         </>

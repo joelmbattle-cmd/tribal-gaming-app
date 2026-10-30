@@ -48,11 +48,8 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  // Holds the id being confirmed. Cleared whenever the drawer opens or closes
-  // so a record can never appear pre-armed when it is reopened.
-  const [confirmingArchive, setConfirmingArchive] = useState<string | null>(null);
   // Holds the id being edited. Cleared whenever the drawer opens or closes,
-  // same reasoning as confirmingArchive above.
+  // so a record can never appear pre-armed when it is reopened.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPersonName, setEditPersonName] = useState("");
   const [editAliases, setEditAliases] = useState("");
@@ -197,13 +194,11 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
   };
 
   const openRecord = (id: string) => {
-    setConfirmingArchive(null);
     setEditingId(null);
     setSelected(id);
   };
 
   const closeRecord = () => {
-    setConfirmingArchive(null);
     setEditingId(null);
     setSelected(null);
   };
@@ -256,8 +251,7 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
     startTransition(async () => {
       try {
         await archiveExclusionAction(selected!);
-        setConfirmingArchive(null);
-        setSelected(null);
+            setSelected(null);
         showToast("Exclusion archived");
         router.refresh();
       } catch {
@@ -506,20 +500,12 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
                   <button className="btn btn-primary" disabled={pending} onClick={unarchive}>
                     Restore Exclusion
                   </button>
-                ) : confirmingArchive === selected ? (
-                  <>
-                    <div className="field-label">
-                      Archiving removes this case from the active list. This cannot be undone from the app.
-                    </div>
-                    <button className="btn btn-danger" disabled={pending} onClick={archive}>
-                      Confirm Archive
-                    </button>
-                    <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(null)}>
-                      Cancel
-                    </button>
-                  </>
                 ) : (
-                  <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(selected)}>
+                  <button
+                    className="btn"
+                    disabled={pending}
+                    onClick={() => confirm({ title: "Archive this exclusion case?", description: "Archiving removes this case from the active list. This cannot be undone from the app.", confirmLabel: "Archive", danger: true }, archive)}
+                  >
                     Archive Exclusion
                   </button>
                 )}

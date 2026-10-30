@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useConfirm } from "@/components/confirm-dialog";
 import { useToast } from "@/components/toast";
 import {
   archiveMachineAction,
@@ -51,14 +52,13 @@ export function MachineDrawerContent({
   const [data, setData] = useState<MachineDrawerData | null>(null);
   const [editing, setEditing] = useState(false);
   const [bankChoice, setBankChoice] = useState("");
-  const [confirmingArchive, setConfirmingArchive] = useState(false);
   if (loadedSerial !== serial) {
     setLoadedSerial(serial);
     setData(null);
     setEditing(false);
-    setConfirmingArchive(false);
   }
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm(pending);
   const fileInput = useRef<HTMLInputElement>(null);
   const showToast = useToast();
   const { isShown } = useHiddenMachineFields();
@@ -167,8 +167,7 @@ export function MachineDrawerContent({
     startTransition(async () => {
       try {
         await archiveMachineAction(serial);
-        setConfirmingArchive(false);
-        showToast("Machine archived — removed from the floor map");
+            showToast("Machine archived — removed from the floor map");
         onChanged?.();
         onClose();
       } catch (err) {
@@ -300,21 +299,23 @@ export function MachineDrawerContent({
             <button className="btn btn-primary" disabled={pending} onClick={unarchive}>
               Restore Machine
             </button>
-          ) : confirmingArchive ? (
-            <>
-              <div className="field-label">
-                Archiving removes this machine from the active floor map and Machine Records list. All fields, documents,
-                and audit history are kept and can be restored later.
-              </div>
-              <button className="btn btn-danger" disabled={pending} onClick={archive}>
-                Confirm Archive
-              </button>
-              <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(false)}>
-                Cancel
-              </button>
-            </>
           ) : (
-            <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(true)}>
+            <button
+              className="btn"
+              disabled={pending}
+              onClick={() =>
+                confirm(
+                  {
+                    title: "Archive this machine?",
+                    description:
+                      "Archiving removes this machine from the active floor map and Machine Records list. All fields, documents, and audit history are kept and can be restored later.",
+                    confirmLabel: "Archive",
+                    danger: true,
+                  },
+                  archive,
+                )
+              }
+            >
               Archive Machine
             </button>
           )}
@@ -362,6 +363,7 @@ export function MachineDrawerContent({
           ))
         )}
       </div>
+      {dialog}
     </>
   );
 }

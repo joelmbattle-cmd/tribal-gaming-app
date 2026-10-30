@@ -510,7 +510,7 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                   {!isClosed && (
                     <button
                       className="doc-delete-btn"
-                      onClick={() => unlinkMachine(m.id)}
+                      onClick={() => confirm({ title: "Unlink this machine from the shipment?", description: `${m.serial} will no longer be associated with this shipment. You can link it again later.`, confirmLabel: "Unlink", danger: true }, () => unlinkMachine(m.id))}
                       disabled={pending}
                       title="Unlink machine"
                     >
