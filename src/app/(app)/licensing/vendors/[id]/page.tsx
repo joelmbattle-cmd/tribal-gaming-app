@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ssnLast4 } from "@/lib/ssn";
 import { getVendorCompany } from "@/lib/data/vendor-companies";
+import { soonestExpiry } from "@/lib/license-expiry";
 import { VendorCompanyDetailView } from "@/components/views/vendor-company-detail-view";
 
 export default async function VendorCompanyPage({
@@ -16,6 +17,7 @@ export default async function VendorCompanyPage({
   if (!company) notFound();
 
   const showArchived = archived === "1";
+  const activePrincipals = company.principals.filter((p) => !p.archived);
 
   return (
     <VendorCompanyDetailView
@@ -34,6 +36,11 @@ export default async function VendorCompanyPage({
         archived: company.archived,
         archivedAt: company.archivedAt ? company.archivedAt.toISOString().slice(0, 10) : null,
         archivedBy: company.archivedBy,
+        activePrincipalCount: activePrincipals.length,
+        soonestExpiry:
+          soonestExpiry([company.licenseExpirationDate, ...activePrincipals.map((p) => p.licenseExpirationDate)])
+            ?.toISOString()
+            .slice(0, 10) ?? null,
         createdBy: company.createdBy,
         lastModifiedBy: company.lastModifiedBy,
       }}

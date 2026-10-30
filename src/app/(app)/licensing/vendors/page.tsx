@@ -1,4 +1,5 @@
 import { getVendorCompanyList } from "@/lib/data/vendor-companies";
+import { soonestExpiry } from "@/lib/license-expiry";
 import { VendorCompanyListView } from "@/components/views/vendor-company-list-view";
 
 export default async function VendorLicensingPage({
@@ -27,6 +28,10 @@ export default async function VendorLicensingPage({
         archivedBy: c.archivedBy,
         principalCount: c.principals.length,
         pendingApplicationCount: c.applications.length,
+        soonestExpiry:
+          soonestExpiry([c.licenseExpirationDate, ...c.principals.map((p) => p.licenseExpirationDate)])
+            ?.toISOString()
+            .slice(0, 10) ?? null,
       }))}
     />
   );

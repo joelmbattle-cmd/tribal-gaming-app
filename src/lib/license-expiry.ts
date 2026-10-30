@@ -29,6 +29,18 @@ export function resolveLicenseExpiration(
   return null;
 }
 
+/** Earliest non-null expiration date among the given dates (null when none). */
+export function soonestExpiry(dates: Array<Date | null | undefined>): Date | null {
+  let soonest: Date | null = null;
+  for (const d of dates) if (d && (!soonest || d < soonest)) soonest = d;
+  return soonest;
+}
+
+/** Status keys shared by Person and VendorCompany. */
+export const VENDOR_STATUSES = ["cleared", "flagged", "investigation"] as const;
+/** New vendor companies start cleared; "investigation" is for individuals under background review. */
+export const DEFAULT_VENDOR_COMPANY_STATUS = "cleared";
+
 export type ExpiryStatus = "expired" | "expiring" | "ok" | "none";
 
 export function licenseExpiryStatus(

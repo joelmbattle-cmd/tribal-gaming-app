@@ -6,6 +6,7 @@ import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { createVendorCompanyAction } from "@/lib/actions/vendor-companies";
+import { DEFAULT_VENDOR_COMPANY_STATUS, EXPIRY_STATUS_CHIP, EXPIRY_STATUS_LABEL, licenseExpiryStatus } from "@/lib/license-expiry";
 import { STATUS_CHIP, STATUS_LABEL } from "@/components/views/profile-list-view";
 
 export type VendorCompanyViewItem = {
@@ -23,6 +24,8 @@ export type VendorCompanyViewItem = {
   archivedBy?: string | null;
   principalCount: number;
   pendingApplicationCount: number;
+  /** Soonest license expiration across the company and its active principals (YYYY-MM-DD). */
+  soonestExpiry?: string | null;
 };
 
 const LICENSE_TYPE_OPTIONS = ["Vendor", "Manufacturer", "Distributor", "Other"];
@@ -41,7 +44,7 @@ export function VendorCompanyListView({
   const showToast = useToast();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState("");
-  const [status, setStatus] = useState("investigation");
+  const [status, setStatus] = useState<string>(DEFAULT_VENDOR_COMPANY_STATUS);
   const [contactInfo, setContactInfo] = useState("");
   const [address, setAddress] = useState("");
   const [licenseType, setLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
@@ -52,7 +55,7 @@ export function VendorCompanyListView({
 
   const resetForm = () => {
     setName("");
-    setStatus("investigation");
+    setStatus(DEFAULT_VENDOR_COMPANY_STATUS);
     setContactInfo("");
     setAddress("");
     setLicenseType(LICENSE_TYPE_OPTIONS[0]);
@@ -115,8 +118,18 @@ export function VendorCompanyListView({
 
       <div className="profiles">
         {companies.length === 0 && (
-          <div className="field-label" style={{ padding: 16 }}>
-            {showArchived ? "No archived vendor companies." : "No active vendor companies."}
+          <div className="field-label" style={{ padding: 16, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12 }}>
+            {showArchived ? (
+              <>
+                <div>No archived vendor companies.</div>
+                <button className="btn" onClick={toggleShowArchived}>Show Active</button>
+              </>
+            ) : (
+              <>
+                <div>No active vendor companies yet. Add your first vendor company to start licensing its principals.</div>
+                <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Company</button>
+              </>
+            )}
           </div>
         )}
         {companies.map((c) => (
@@ -127,6 +140,14 @@ export function VendorCompanyListView({
               {showArchived
                 ? `Archived ${c.archivedAt ?? ""} by ${c.archivedBy || "—"}`
                 : `${c.principalCount} principal${c.principalCount === 1 ? "" : "s"} · ${c.pendingApplicationCount} pending app${c.pendingApplicationCount === 1 ? "" : "s"}`}
+              {!showArchived && c.soonestExpiry && (
+                <>
+                  {" · Soonest expiry "}{c.soonestExpiry}{" "}
+                  <span className={`chip ${EXPIRY_STATUS_CHIP[licenseExpiryStatus(new Date(c.soonestExpiry))]}`}>
+                    {EXPIRY_STATUS_LABEL[licenseExpiryStatus(new Date(c.soonestExpiry))]}
+                  </span>
+                </>
+              )}
             </div>
             <div><span className={`chip ${STATUS_CHIP[c.status] ?? "chip-neutral"}`}>{STATUS_LABEL[c.status] ?? c.status}</span></div>
             <div className="chevron">›</div>
