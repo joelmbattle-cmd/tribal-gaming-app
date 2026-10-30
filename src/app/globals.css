@@ -868,3 +868,25 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 82px); }
   .bank-resize-handle::after { right: 7px; bottom: 7px; width: 11px; height: 11px; }
 }
 .setup-pane[hidden] { display: none; }
+
+/* ---------- Profile drawer: sticky case card + tabs ---------- */
+/* The drawer / m-sheet element is the scroll container; this block pins the
+   head, case summary and tab bar while the active tab panel scrolls beneath. */
+.drawer-sticky { position: sticky; top: 0; z-index: 3; background: var(--panel); border-bottom: 1px solid var(--hairline-strong); }
+.m-sheet .drawer-sticky { top: -10px; padding-top: 10px; margin-top: -10px; }
+.drawer .drawer-sticky .drawer-head { position: static; }
+.drawer-sticky .drawer-head { border-bottom: none; padding-bottom: 10px; }
+.case-card {
+  display: flex; align-items: center; gap: 12px; margin: 0 24px 10px; padding: 10px 12px;
+  background: var(--panel-light); border: 1px solid var(--hairline-strong); border-radius: 10px;
+}
+.m-sheet .case-card { margin: 0 0 10px; }
+.case-card-photo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.case-card-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.case-card-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.case-card-sub { font-family: var(--font-plex-mono); font-size: 11px; color: var(--parchment-dim); overflow: hidden; text-overflow: ellipsis; }
+.case-card-stamp { transform: rotate(-6deg) scale(0.75); flex-shrink: 0; }
+.drawer-tabs { display: flex; gap: 6px; padding: 0 24px 10px; overflow-x: auto; scrollbar-width: none; }
+.drawer-tabs::-webkit-scrollbar { display: none; }
+.m-sheet .drawer-tabs { padding: 0 0 10px; }
+.drawer-tab { flex-shrink: 0; cursor: pointer; }

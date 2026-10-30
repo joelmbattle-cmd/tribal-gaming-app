@@ -2,6 +2,7 @@
 
 import { useConfirm } from "@/components/confirm-dialog";
 import { useState, useTransition, useRef } from "react";
+import { ProfileDrawerTabs, type ProfileDrawerTab } from "@/components/profile-drawer-tabs";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ResponsiveOverlay } from "@/components/overlay";
 import { useShellVariant } from "@/components/shell-variant";
@@ -86,6 +87,7 @@ export function ProfileListView({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<string | null>(null);
+  const [drawerTab, setDrawerTab] = useState<ProfileDrawerTab>("overview");
   const [showCreateForm, setShowCreateForm] = useState(false);
   // Holds the id being edited. Cleared whenever the drawer opens or closes,
   // so a record can never appear pre-armed when it is reopened.
@@ -325,6 +327,7 @@ export function ProfileListView({
 
   const openRecord = (id: string) => {
     setEditingId(null);
+    setDrawerTab("overview");
     setSelected(id);
   };
 
@@ -541,20 +544,45 @@ export function ProfileListView({
           // profile archived out from under an open edit immediately drops
           // back to view-only instead of leaving stale inputs on screen.
           const isEditing = editingId === person.id && !person.archived;
+          const expiry = person.licenseExpirationDate ? licenseExpiryStatus(new Date(person.licenseExpirationDate)) : null;
           return (
           <>
-            <div className="drawer-head">
-              <div>
-                <div className="drawer-eyebrow">Licensing Profile</div>
-                <div className="drawer-title">{person.name}</div>
-                <div className="p-id" style={{ marginTop: 4 }}>{person.id} · {person.role}</div>
+            <div className="drawer-sticky">
+              <div className="drawer-head">
+                <div>
+                  <div className="drawer-eyebrow">Licensing Profile</div>
+                  <div className="drawer-title">{person.name}</div>
+                  <div className="p-id" style={{ marginTop: 4 }}>{person.id} · {person.role}</div>
+                </div>
+                <button className="drawer-close" onClick={closeRecord}>✕</button>
               </div>
-              <button className="drawer-close" onClick={closeRecord}>✕</button>
+              <div className="case-card">
+                {person.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="case-card-photo" src={person.photoUrl} alt="" />
+                ) : (
+                  <div className="avatar case-card-photo">{initials(person.name)}</div>
+                )}
+                <div className="case-card-meta">
+                  <div className="case-card-row">
+                    <span className={`chip ${STATUS_CHIP[person.status] ?? "chip-neutral"}`}>{STATUS_LABEL[person.status] ?? person.status}</span>
+                    <span className="chip chip-neutral">{licensingStatusLabel(person.applicationStatus)}</span>
+                  </div>
+                  <div className="case-card-sub">
+                    {person.licenseType || "No license type"}
+                    {person.licenseExpirationDate ? ` · exp ${person.licenseExpirationDate}` : ""}
+                    {expiry && (
+                      <span className={`chip ${EXPIRY_STATUS_CHIP[expiry]}`} style={{ marginLeft: 6 }}>{EXPIRY_STATUS_LABEL[expiry]}</span>
+                    )}
+                  </div>
+                </div>
+                <div className={`stamp case-card-stamp ${STAMP_CLASS[person.status]}`}>{STAMP_TEXT[person.status]}</div>
+              </div>
+              <ProfileDrawerTabs active={drawerTab} onChange={setDrawerTab} historyCount={person.history.length} />
             </div>
             <div className="drawer-body">
-              <div className="stamp-wrap">
-                <div className={`stamp ${STAMP_CLASS[person.status]}`}>{STAMP_TEXT[person.status]}</div>
-              </div>
+              {drawerTab === "overview" && (
+                <div role="tabpanel" id="profile-tab-overview" aria-labelledby="profile-tabbtn-overview">
               {person.photoUrl && (
                 <div className="photo-frame">
                   {/* Plain <img>: the source is either a blob URL or an inline
@@ -576,7 +604,6 @@ export function ProfileListView({
               >
                 {person.photoUrl ? "Update Photo" : "+ Add Photo"}
               </button>
-
               {!person.archived && (
                 <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                   {isEditing ? (
@@ -595,7 +622,6 @@ export function ProfileListView({
                   )}
                 </div>
               )}
-
               <div className="section-label" style={{ marginTop: 16 }}>Identification</div>
               {isEditing ? (
                 <div className="field-grid">
@@ -648,7 +674,6 @@ export function ProfileListView({
                   </div>
                 </div>
               )}
-
               <div className="section-label">Position &amp; Job Description</div>
               {isEditing ? (
                 <>
@@ -672,28 +697,6 @@ export function ProfileListView({
                   <div className="field-value">{person.jobDescription || "—"}</div>
                 </>
               )}
-              {!person.archived && (
-                <div style={{ marginTop: 12 }}>
-                  <div className="field-label" style={{ marginBottom: 6 }}>Generate Forms</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {FORM_TYPES.map((formType) => {
-                      const locked = lockedReason(FORM_SLOT[formType], person.documents);
-                      return (
-                        <button
-                          key={formType}
-                          className="btn btn-small"
-                          disabled={pending || !!locked}
-                          title={locked ? `🔒 ${locked}` : `Preview/print the ${FORM_LABEL[formType]} letter, prefilled from this profile`}
-                          onClick={() => confirm(formType === "DENIAL" ? { title: "Generate Denial letter?", description: "This generates the Denial letter and files it on this profile. Filed letters can't be easily undone.", confirmLabel: "Generate & File Denial", danger: true } : { title: `Generate ${FORM_LABEL[formType]}?`, description: "This generates the letter and files it into this profile's document slot.", confirmLabel: "Generate & File" }, () => generateForm(formType))}
-                        >
-                          {FORM_LABEL[formType]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               <div className="section-label">License</div>
               {isEditing ? (
                 <div className="field-grid">
@@ -736,7 +739,6 @@ export function ProfileListView({
                   </div>
                 </div>
               )}
-
               <div className="section-label">Application &amp; Status</div>
               {isEditing ? (
                 <div className="field-grid">
@@ -782,7 +784,88 @@ export function ProfileListView({
                   <div><div className="field-label">Suitability Determination</div><div className="field-value">{person.suitabilityDetermination || "—"}</div></div>
                 </div>
               )}
-
+              <div className="section-label">System &amp; Audit</div>
+              <div className="field-grid">
+                <div><div className="field-label">Created By</div><div className="field-value">{person.createdBy || "—"}</div></div>
+                <div><div className="field-label">Last Modified By</div><div className="field-value">{person.lastModifiedBy || "—"}</div></div>
+                <div><div className="field-label">Archived By</div><div className="field-value">{person.archivedBy ? `${person.archivedBy} on ${person.archivedAt}` : "—"}</div></div>
+                <div><div className="field-label">Restored By</div><div className="field-value">{person.restoredBy ? `${person.restoredBy} on ${person.restoredAt}` : "—"}</div></div>
+              </div>
+              <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
+                {person.archived ? (
+                  <button className="btn btn-primary" disabled={pending} onClick={unarchive}>
+                    Restore Profile
+                  </button>
+                ) : (
+                  <button
+                    className="btn"
+                    disabled={pending}
+                    onClick={() => confirm({ title: "Archive this profile?", description: "Archiving removes this profile from the active roster. This cannot be undone from the app.", confirmLabel: "Archive", danger: true }, archive)}
+                  >
+                    Archive Profile
+                  </button>
+                )}
+              </div>
+                </div>
+              )}
+              {drawerTab === "documents" && (
+                <div role="tabpanel" id="profile-tab-documents" aria-labelledby="profile-tabbtn-documents">
+              <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Document Checklist</div>
+              <DocumentChecklist
+                documents={person.documents}
+                archived={person.archived}
+                pending={pending}
+                onUpload={uploadDocumentToSlot}
+                onReplace={replaceDocument}
+                onRemove={(id) => confirm({ title: "Delete this document?", description: "The file will be permanently removed. This cannot be undone.", confirmLabel: "Delete", danger: true }, () => removeDocument(id))}
+              />
+                </div>
+              )}
+              {drawerTab === "background" && (
+                <div role="tabpanel" id="profile-tab-background" aria-labelledby="profile-tabbtn-background">
+              {!person.archived && (
+                <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                  {isEditing ? (
+                    <>
+                      <button className="btn btn-primary" disabled={pending} onClick={saveEdit}>
+                        Save Changes
+                      </button>
+                      <button className="btn" disabled={pending} onClick={cancelEdit}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn" disabled={pending} onClick={() => startEdit(person)}>
+                      Edit Details
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="section-label">Background Check</div>
+              <div className="doc-standalone">
+                <DocumentSlotCard
+                  label={BACKGROUND_CHECK_SLOT.label}
+                  critical={false}
+                  docs={person.documents.filter((d) => d.slot === "BACKGROUND_CHECK")}
+                  locked={null}
+                  archived={person.archived}
+                  pending={pending}
+                  onUpload={(file) => uploadDocumentToSlot("BACKGROUND_CHECK", file)}
+                  onReplace={replaceDocument}
+                  onRemove={(id) => confirm({ title: "Delete this document?", description: "The file will be permanently removed. This cannot be undone.", confirmLabel: "Delete", danger: true }, () => removeDocument(id))}
+                  extra={
+                    !person.archived && (
+                      <button
+                        className="btn doc-vendor-order-btn"
+                        disabled
+                        title="Vendor integration not yet connected — this will let staff order a check directly from this box"
+                      >
+                        Order Background Check — Coming Soon
+                      </button>
+                    )
+                  }
+                />
+              </div>
               <div className="section-label">Investigation Tracking</div>
               {isEditing ? (
                 <div className="field-grid">
@@ -818,44 +901,38 @@ export function ProfileListView({
                   <div className="field-value">{person.keyFindings || "—"}</div>
                 </>
               )}
-
-              <div className="section-label">Document Checklist</div>
-              <DocumentChecklist
-                documents={person.documents}
-                archived={person.archived}
-                pending={pending}
-                onUpload={uploadDocumentToSlot}
-                onReplace={replaceDocument}
-                onRemove={(id) => confirm({ title: "Delete this document?", description: "The file will be permanently removed. This cannot be undone.", confirmLabel: "Delete", danger: true }, () => removeDocument(id))}
-              />
-
-              <div className="section-label">Background Check</div>
-              <div className="doc-standalone">
-                <DocumentSlotCard
-                  label={BACKGROUND_CHECK_SLOT.label}
-                  critical={false}
-                  docs={person.documents.filter((d) => d.slot === "BACKGROUND_CHECK")}
-                  locked={null}
-                  archived={person.archived}
-                  pending={pending}
-                  onUpload={(file) => uploadDocumentToSlot("BACKGROUND_CHECK", file)}
-                  onReplace={replaceDocument}
-                  onRemove={(id) => confirm({ title: "Delete this document?", description: "The file will be permanently removed. This cannot be undone.", confirmLabel: "Delete", danger: true }, () => removeDocument(id))}
-                  extra={
-                    !person.archived && (
-                      <button
-                        className="btn doc-vendor-order-btn"
-                        disabled
-                        title="Vendor integration not yet connected — this will let staff order a check directly from this box"
-                      >
-                        Order Background Check — Coming Soon
-                      </button>
-                    )
-                  }
-                />
-              </div>
-
-              <div className="section-label">Investigation History</div>
+                </div>
+              )}
+              {drawerTab === "forms" && (
+                <div role="tabpanel" id="profile-tab-forms" aria-labelledby="profile-tabbtn-forms">
+              {person.archived ? (
+                <div className="field-label">Archived profiles can&apos;t generate forms.</div>
+              ) : (
+                <div>
+                  <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Generate Forms</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {FORM_TYPES.map((formType) => {
+                      const locked = lockedReason(FORM_SLOT[formType], person.documents);
+                      return (
+                        <button
+                          key={formType}
+                          className="btn btn-small"
+                          disabled={pending || !!locked}
+                          title={locked ? `🔒 ${locked}` : `Preview/print the ${FORM_LABEL[formType]} letter, prefilled from this profile`}
+                          onClick={() => confirm(formType === "DENIAL" ? { title: "Generate Denial letter?", description: "This generates the Denial letter and files it on this profile. Filed letters can't be easily undone.", confirmLabel: "Generate & File Denial", danger: true } : { title: `Generate ${FORM_LABEL[formType]}?`, description: "This generates the letter and files it into this profile's document slot.", confirmLabel: "Generate & File" }, () => generateForm(formType))}
+                        >
+                          {FORM_LABEL[formType]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+                </div>
+              )}
+              {drawerTab === "history" && (
+                <div role="tabpanel" id="profile-tab-history" aria-labelledby="profile-tabbtn-history">
+              <div className="section-label" style={{ borderTop: "none", marginTop: 0 }}>Investigation History</div>
               <div className="ledger">
                 {person.history.map((h) => (
                   <div className="ledger-item" key={h.id}>
@@ -864,28 +941,8 @@ export function ProfileListView({
                   </div>
                 ))}
               </div>
-              <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
-                {person.archived ? (
-                  <button className="btn btn-primary" disabled={pending} onClick={unarchive}>
-                    Restore Profile
-                  </button>
-                ) : (
-                  <button
-                    className="btn"
-                    disabled={pending}
-                    onClick={() => confirm({ title: "Archive this profile?", description: "Archiving removes this profile from the active roster. This cannot be undone from the app.", confirmLabel: "Archive", danger: true }, archive)}
-                  >
-                    Archive Profile
-                  </button>
-                )}
-              </div>
-              <div className="section-label">System &amp; Audit</div>
-              <div className="field-grid">
-                <div><div className="field-label">Created By</div><div className="field-value">{person.createdBy || "—"}</div></div>
-                <div><div className="field-label">Last Modified By</div><div className="field-value">{person.lastModifiedBy || "—"}</div></div>
-                <div><div className="field-label">Archived By</div><div className="field-value">{person.archivedBy ? `${person.archivedBy} on ${person.archivedAt}` : "—"}</div></div>
-                <div><div className="field-label">Restored By</div><div className="field-value">{person.restoredBy ? `${person.restoredBy} on ${person.restoredAt}` : "—"}</div></div>
-              </div>
+                </div>
+              )}
             </div>
           </>
           );
