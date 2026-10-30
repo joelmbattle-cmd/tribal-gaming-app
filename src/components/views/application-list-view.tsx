@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/confirm-dialog";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -74,6 +75,7 @@ export function ApplicationListView({
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm(pending);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -302,15 +304,15 @@ export function ApplicationListView({
               ) : (
                 <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>
                   {application.progress === "Invited" && (
-                    <button className="btn" disabled={pending} onClick={() => markSubmitted(application.id)}>Mark Submitted</button>
+                    <button className="btn" disabled={pending} onClick={() => confirm({ title: "Mark as submitted?", description: "This records the application as submitted by the applicant.", confirmLabel: "Mark Submitted" }, () => markSubmitted(application.id))}>Mark Submitted</button>
                   )}
                   {(application.progress === "Submitted" || application.progress === "In Progress") && (
-                    <button className="btn btn-primary" disabled={pending} onClick={() => accept(application.id)}>
+                    <button className="btn btn-primary" disabled={pending} onClick={() => confirm({ title: "Accept this application?", description: "This accepts the application and creates a licensing profile for the applicant.", confirmLabel: "Accept & Create Profile" }, () => accept(application.id))}>
                       Accept → Create Profile
                     </button>
                   )}
                   {application.progress !== "Rejected" && (
-                    <button className="btn btn-danger" disabled={pending} onClick={() => reject(application.id)}>Reject</button>
+                    <button className="btn btn-danger" disabled={pending} onClick={() => confirm({ title: "Reject this application?", description: "The application will be marked Rejected.", confirmLabel: "Reject", danger: true }, () => reject(application.id))}>Reject</button>
                   )}
                 </div>
               )}
@@ -443,6 +445,7 @@ export function ApplicationListView({
           </div>
         </div>
       </ResponsiveOverlay>
+      {dialog}
     </div>
   );
 }

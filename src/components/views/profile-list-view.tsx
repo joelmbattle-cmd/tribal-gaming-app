@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/confirm-dialog";
 import { useState, useTransition, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ResponsiveOverlay } from "@/components/overlay";
@@ -145,6 +146,7 @@ export function ProfileListView({
   const [investigationCompletionDate, setInvestigationCompletionDate] = useState("");
   const [keyFindings, setKeyFindings] = useState("");
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm(pending);
   const photoInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const showToast = useToast();
@@ -661,7 +663,7 @@ export function ProfileListView({
                           className="btn btn-small"
                           disabled={pending || !!locked}
                           title={locked ? `🔒 ${locked}` : `Preview/print the ${FORM_LABEL[formType]} letter, prefilled from this profile`}
-                          onClick={() => generateForm(formType)}
+                          onClick={() => confirm(formType === "DENIAL" ? { title: "Generate Denial letter?", description: "This generates the Denial letter and files it on this profile. Filed letters can't be easily undone.", confirmLabel: "Generate & File Denial", danger: true } : { title: `Generate ${FORM_LABEL[formType]}?`, description: "This generates the letter and files it into this profile's document slot.", confirmLabel: "Generate & File" }, () => generateForm(formType))}
                         >
                           {FORM_LABEL[formType]}
                         </button>
@@ -803,7 +805,7 @@ export function ProfileListView({
                 pending={pending}
                 onUpload={uploadDocumentToSlot}
                 onReplace={replaceDocument}
-                onRemove={removeDocument}
+                onRemove={(id) => confirm({ title: "Delete this document?", description: "The file will be permanently removed. This cannot be undone.", confirmLabel: "Delete", danger: true }, () => removeDocument(id))}
               />
 
               <div className="section-label">Background Check</div>
@@ -817,7 +819,7 @@ export function ProfileListView({
                   pending={pending}
                   onUpload={(file) => uploadDocumentToSlot("BACKGROUND_CHECK", file)}
                   onReplace={replaceDocument}
-                  onRemove={removeDocument}
+                  onRemove={(id) => confirm({ title: "Delete this document?", description: "The file will be permanently removed. This cannot be undone.", confirmLabel: "Delete", danger: true }, () => removeDocument(id))}
                   extra={
                     !person.archived && (
                       <button
@@ -1147,6 +1149,7 @@ export function ProfileListView({
 
       <NoObjectionFanout open={showFanout} onClose={() => setShowFanout(false)} people={people} />
       <NigcPacketBuilder open={showNigcPacket} onClose={() => setShowNigcPacket(false)} people={people} />
+      {dialog}
     </div>
   );
 }

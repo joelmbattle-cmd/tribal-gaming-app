@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/confirm-dialog";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -58,6 +59,7 @@ export function VendorCompanyDetailView({
   const router = useRouter();
   const showToast = useToast();
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm(pending);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(company.name);
@@ -283,12 +285,12 @@ export function VendorCompanyDetailView({
               <div><span className={`chip ${PROGRESS_CHIP[a.progress] ?? "chip-neutral"}`}>{a.progress}</span></div>
               <div style={{ display: "flex", gap: 6 }}>
                 {a.progress === "Invited" && (
-                  <button className="btn btn-small" disabled={pending} onClick={() => markSubmitted(a.id)}>Mark Submitted</button>
+                  <button className="btn btn-small" disabled={pending} onClick={() => confirm({ title: "Mark as submitted?", description: `Record ${a.name}'s principal application as submitted.`, confirmLabel: "Mark Submitted" }, () => markSubmitted(a.id))}>Mark Submitted</button>
                 )}
                 {(a.progress === "Submitted" || a.progress === "In Progress") && (
-                  <button className="btn btn-small btn-primary" disabled={pending} onClick={() => accept(a.id)}>Accept</button>
+                  <button className="btn btn-small btn-primary" disabled={pending} onClick={() => confirm({ title: "Accept this application?", description: `Accept ${a.name}'s application and create a principal licensing profile.`, confirmLabel: "Accept & Create Profile" }, () => accept(a.id))}>Accept</button>
                 )}
-                <button className="btn btn-small btn-danger" disabled={pending} onClick={() => reject(a.id)}>Reject</button>
+                <button className="btn btn-small btn-danger" disabled={pending} onClick={() => confirm({ title: "Reject this application?", description: `${a.name}'s application will be marked Rejected.`, confirmLabel: "Reject", danger: true }, () => reject(a.id))}>Reject</button>
               </div>
             </div>
           ))}
@@ -302,6 +304,7 @@ export function VendorCompanyDetailView({
         subtitle="Principals licensed under this company. Click a profile to review documents and background investigation status."
         vendorCompanyId={company.id}
       />
+      {dialog}
     </div>
   );
 }
