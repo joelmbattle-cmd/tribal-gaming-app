@@ -13,7 +13,8 @@ import { NoObjectionFanout } from "@/components/no-objection-fanout";
 import { NigcPacketBuilder } from "@/components/nigc-packet-builder";
 import { BACKGROUND_CHECK_SLOT, lockedReason, type DocumentSlot } from "@/lib/document-slots";
 import { LICENSING_STATUSES, licensingStatusLabel, isCriticalPipeline, isComplianceFlag, hasLicensingActions, type LicensingApplicationStatus } from "@/lib/licensing-status";
-import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction, generatePersonFormAction } from "@/lib/actions/people";
+import { createPersonAction, updatePersonAction, uploadPersonPhotoAction, addPersonDocumentAction, replacePersonDocumentAction, deletePersonDocumentAction, archivePersonAction, unarchivePersonAction, generatePersonFormAction, revealPersonSsnAction } from "@/lib/actions/people";
+import { maskSsn } from "@/lib/ssn";
 import { EXPIRY_STATUS_CHIP, EXPIRY_STATUS_LABEL, licenseExpiryStatus } from "@/lib/license-expiry";
 import { FORM_TYPES, FORM_LABEL, FORM_SLOT, type FormType } from "@/lib/licensing-forms";
 import { openHtmlPreview } from "@/lib/print-preview";
@@ -26,7 +27,8 @@ export type ProfileViewItem = {
   photoUrl?: string | null;
   dateOfBirth?: string | null;
   contactInfo?: string | null;
-  ssn?: string | null;
+  /** Last 4 digits only — full SSN is never in list props. */
+  ssnLast4?: string | null;
   position?: string | null;
   jobDescription?: string | null;
   licenseType?: string | null;
@@ -97,6 +99,8 @@ export function ProfileListView({
   const [editDateOfBirth, setEditDateOfBirth] = useState("");
   const [editContactInfo, setEditContactInfo] = useState("");
   const [editSsn, setEditSsn] = useState("");
+  // Full SSN revealed for the current drawer only (audited server-side).
+  const [revealedSsn, setRevealedSsn] = useState<{ id: string; ssn: string | null } | null>(null);
   const [editPosition, setEditPosition] = useState("");
   const [editJobDescription, setEditJobDescription] = useState("");
   const [editLicenseType, setEditLicenseType] = useState(LICENSE_TYPE_OPTIONS[0]);
@@ -340,7 +344,7 @@ export function ProfileListView({
     setEditPersonStatus(p.status);
     setEditDateOfBirth(p.dateOfBirth ?? "");
     setEditContactInfo(p.contactInfo ?? "");
-    setEditSsn(p.ssn ?? "");
+    setEditSsn("");
     setEditPosition(p.position ?? "");
     setEditJobDescription(p.jobDescription ?? "");
     setEditLicenseType(p.licenseType ?? LICENSE_TYPE_OPTIONS[0]);
@@ -360,6 +364,18 @@ export function ProfileListView({
 
   const cancelEdit = () => setEditingId(null);
 
+  const revealSsn = (personId: string) => {
+    startTransition(async () => {
+      try {
+        const ssn = await revealPersonSsnAction(personId);
+        setRevealedSsn({ id: personId, ssn });
+        router.refresh();
+      } catch {
+        showToast("Failed to reveal SSN");
+      }
+    });
+  };
+
   const saveEdit = () => {
     if (!editName.trim() || !editRole.trim()) {
       showToast("Full legal name and role are required");
@@ -373,7 +389,8 @@ export function ProfileListView({
           status: editPersonStatus,
           dateOfBirth: editDateOfBirth,
           contactInfo: editContactInfo.trim(),
-          ssn: editSsn.trim(),
+          // Blank = keep existing SSN (form only knows last-4).
+          ...(editSsn.trim() ? { ssn: editSsn.trim() } : {}),
           position: editPosition.trim(),
           jobDescription: editJobDescription.trim(),
           licenseType: editLicenseType,
@@ -614,7 +631,7 @@ export function ProfileListView({
                   </div>
                   <div>
                     <label className="field-label">Social Security Number</label>
-                    <input type="text" className="field-input" placeholder="XXX-XX-XXXX" value={editSsn} onChange={(e) => setEditSsn(e.target.value)} disabled={pending} />
+                    <input type="text" className="field-input" placeholder={person.ssnLast4 ? `Leave blank to keep ${maskSsn(person.ssnLast4)}` : "XXX-XX-XXXX"} value={editSsn} onChange={(e) => setEditSsn(e.target.value)} disabled={pending} />
                   </div>
                   <div><div className="field-label">Profile ID</div><div className="field-value">{person.id}</div></div>
                 </div>
@@ -624,7 +641,17 @@ export function ProfileListView({
                   <div><div className="field-label">Category</div><div className="field-value" style={{ fontFamily: "var(--font-plex-sans)", fontSize: 12.5 }}>{person.role}</div></div>
                   <div><div className="field-label">Date of Birth</div><div className="field-value">{person.dateOfBirth || "—"}</div></div>
                   <div><div className="field-label">Contact Info</div><div className="field-value">{person.contactInfo || "—"}</div></div>
-                  <div><div className="field-label">Social Security Number</div><div className="field-value">{person.ssn || "—"}</div></div>
+                  <div>
+                    <div className="field-label">Social Security Number</div>
+                    <div className="field-value">
+                      {revealedSsn && revealedSsn.id === person.id ? (revealedSsn.ssn || "—") : maskSsn(person.ssnLast4)}
+                      {person.ssnLast4 && !(revealedSsn && revealedSsn.id === person.id) && (
+                        <button className="btn" style={{ marginLeft: 8, padding: "2px 8px", fontSize: 11 }} disabled={pending} onClick={() => revealSsn(person.id)}>
+                          Reveal
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 

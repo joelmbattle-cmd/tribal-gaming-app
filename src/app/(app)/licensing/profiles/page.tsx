@@ -1,4 +1,5 @@
 import { getPersonList } from "@/lib/data/people";
+import { ssnLast4 } from "@/lib/ssn";
 import { ProfileListView } from "@/components/views/profile-list-view";
 
 export default async function ProfilesPage({
@@ -20,7 +21,7 @@ export default async function ProfilesPage({
         photoUrl: p.photoUrl,
         dateOfBirth: p.dateOfBirth ? p.dateOfBirth.toISOString().slice(0, 10) : null,
         contactInfo: p.contactInfo,
-        ssn: p.ssn,
+        ssnLast4: ssnLast4(p.ssn),
         position: p.position,
         jobDescription: p.jobDescription,
         licenseType: p.licenseType,
