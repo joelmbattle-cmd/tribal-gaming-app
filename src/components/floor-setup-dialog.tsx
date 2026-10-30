@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { useToast } from "@/components/toast";
 import { applyFloorPlanAction } from "@/lib/actions/floor-plan";
 import { importMachinesAction } from "@/lib/actions/import-export";
+import { NO_PLAN_MATCH_ERROR, PLAN_FIRST_ERROR } from "@/lib/import-gate";
 import { extractPlan, guessLayers, layoutPlan, parseDxfScene } from "@/lib/floor-plan/dxf";
 import type { DxfScene } from "@/lib/floor-plan/dxf";
 import { ASSIGN_CREATE, ASSIGN_SKIP, buildBankMatcher } from "@/lib/floor-plan/bank-match";
@@ -429,6 +430,11 @@ function ExcelStep({
     : 0;
   const totalRows = sheet?.rows.length ?? 0;
   const importable = totalRows - skippedRows;
+  // Plan-first guard: Excel merges into CAD plan banks only.
+  const hasPlanBanks = bankOptions.some((b) => b.tagMatch);
+  const planIds = useMemo(() => new Set(bankOptions.filter((b) => b.tagMatch).map((b) => b.name)), [bankOptions]);
+  const matchesPlan = !!bankReport && bankReport.matched.some((m) => planIds.has(m.bank));
+  const planBlock = !hasPlanBanks ? PLAN_FIRST_ERROR : bankReport && !matchesPlan ? NO_PLAN_MATCH_ERROR : null;
 
   const orderedBanks = useMemo(
     () => [...bankOptions].sort((a, b) => Number(b.tagMatch) - Number(a.tagMatch) || a.name.localeCompare(b.name, undefined, { numeric: true })),
@@ -437,6 +443,7 @@ function ExcelStep({
 
   async function runImport() {
     if (!sheet || !mapping || missingRequired.length || !bankReport) return;
+    if (planBlock) { setError(planBlock); return; }
     const rows = applyMapping(sheet.rows, mapping);
     const totals = { created: 0, updated: 0, banksCreated: 0, skipped: 0 };
     try {
@@ -487,11 +494,13 @@ function ExcelStep({
       </p>
 
       <label className="setup-file">
-        <input type="file" accept=".xlsx,.xls" onChange={onFile} disabled={!!busy} />
+        <input type="file" accept=".xlsx,.xls" onChange={onFile} disabled={!!busy || !hasPlanBanks} />
         <span className="btn">{sheet ? "Choose a different file…" : "Choose Excel file…"}</span>
         {fileName && <span className="mono setup-filename">{fileName}</span>}
       </label>
 
+      {!hasPlanBanks && <div className="setup-msg setup-msg-error" role="alert">{PLAN_FIRST_ERROR}</div>}
+      {hasPlanBanks && planBlock && <div className="setup-msg setup-msg-error" role="alert">{planBlock}</div>}
       {error && <div className="setup-msg setup-msg-error" role="alert">{error}</div>}
       {busy && <div className="setup-msg">{busy}</div>}
 
@@ -591,7 +600,7 @@ function ExcelStep({
           )}
 
           <div className="setup-actions">
-            <button className="btn btn-primary" onClick={runImport} disabled={!!busy || missingRequired.length > 0 || importable <= 0}>
+            <button className="btn btn-primary" onClick={runImport} disabled={!!busy || missingRequired.length > 0 || importable <= 0 || !!planBlock}>
               Import {importable > 0 ? importable : 0} machine row{importable === 1 ? "" : "s"}
             </button>
             {skippedRows > 0 && <span className="setup-note">{skippedRows} row(s) will be skipped.</span>}

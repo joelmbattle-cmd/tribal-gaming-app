@@ -110,6 +110,8 @@ function parseImportDate(raw: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+import { PLAN_FIRST_ERROR } from "@/lib/import-gate";
+
 export type ImportOptions = {
   /** Also match a bare tag ("104" / "Bank 104") to a single CAD-imported bank. Off = legacy exact-name match. */
   fuzzyBankMatch?: boolean;
@@ -125,6 +127,18 @@ export type ImportOptions = {
 
 export async function importMachinesAction(rows: ImportRow[], opts: ImportOptions = {}) {
   await requireRole("COMPLIANCE");
+  const legacy = opts.unmatchedBanks !== "skip" || !opts.fuzzyBankMatch;
+  const legacyAllowed =
+    process.env.NEXT_PUBLIC_LEGACY_EXCEL_IMPORT === "1" && process.env.VERCEL_ENV !== "production";
+  if (legacy && !legacyAllowed) {
+    throw new Error("Bare Excel import is disabled. Use Floor Setup (CAD + Excel).");
+  }
+  if (!legacy) {
+    // Plan-first: refuse Excel until CAD plan banks exist, and until this batch actually
+    // targets them — otherwise Excel-before-Create would invent duplicate banks.
+    const planBanks = await db.bank.count({ where: { planId: { not: null } } });
+    if (!planBanks) throw new Error(PLAN_FIRST_ERROR);
+  }
   const areas = await db.area.findMany({ orderBy: { order: "asc" } });
   const settings = await db.mapSettings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
 
