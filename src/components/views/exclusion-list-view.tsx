@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/confirm-dialog";
 import { useState, useTransition, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useToast } from "@/components/toast";
@@ -77,6 +78,7 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
   const [restrictions, setRestrictions] = useState("");
   const [sourceInitiated, setSourceInitiated] = useState("");
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm(pending);
   const fileInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -488,7 +490,7 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
                   <span className="doc-icon">▤</span><span className="doc-name">{d.name}</span><span className="doc-meta">{d.date}</span>
                   <button
                     className="doc-delete-btn"
-                    onClick={() => deleteDocument(d.id)}
+                    onClick={() => confirm({ title: "Delete this document?", description: "The file will be permanently removed. This cannot be undone.", confirmLabel: "Delete", danger: true }, () => deleteDocument(d.id))}
                     disabled={pending}
                     title="Delete document"
                   >
@@ -687,6 +689,7 @@ export function ExclusionListView({ exclusions, showArchived }: { exclusions: Ex
       {adjustingPhoto && (
         <PhotoAdjuster file={adjustingPhoto} onCancel={cancelPhotoAdjust} onConfirm={confirmPhotoAdjust} />
       )}
+      {dialog}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ResponsiveOverlay } from "@/components/overlay";
+import { useConfirm } from "@/components/confirm-dialog";
 import { useToast } from "@/components/toast";
 import { lockedReason, type DocumentSlot } from "@/lib/document-slots";
 import { attachNoObjectionLetterAction } from "@/lib/actions/people";
@@ -34,6 +35,7 @@ export function NoObjectionFanout({
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm(pending);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const showToast = useToast();
@@ -90,7 +92,11 @@ export function NoObjectionFanout({
     if (!file) return;
 
     const ids = eligibleSelectedIds;
-    startTransition(async () => {
+    confirm({
+      title: "Attach No-Objection letter?",
+      description: `File "${file.name}" into the No-Objection slot on ${ids.length} profile${ids.length === 1 ? "" : "s"}.`,
+      confirmLabel: "Attach Letter",
+    }, () => startTransition(async () => {
       try {
         const formData = new FormData();
         formData.set("file", file);
@@ -105,12 +111,13 @@ export function NoObjectionFanout({
       } catch {
         showToast("Failed to attach the letter");
       }
-    });
+    }));
   };
 
   return (
     <ResponsiveOverlay open={open} onClose={handleClose}>
       <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFile} />
+      {dialog}
       <div className="drawer-head">
         <div>
           <div className="drawer-eyebrow">No-Objection Letter</div>

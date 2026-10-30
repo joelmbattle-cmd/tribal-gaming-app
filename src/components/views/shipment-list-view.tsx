@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/confirm-dialog";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
@@ -69,6 +70,7 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
   const [emails, setEmails] = useState("");
   const [machineIds, setMachineIds] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm(pending);
   const fileInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const showToast = useToast();
@@ -535,7 +537,7 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
                   <span className="doc-icon">▤</span><span className="doc-name">{d.name}</span><span className="doc-meta">{d.date}</span>
                   <button
                     className="doc-delete-btn"
-                    onClick={() => deleteDocument(d.id)}
+                    onClick={() => confirm({ title: "Delete this document?", description: "The file will be permanently removed. This cannot be undone.", confirmLabel: "Delete", danger: true }, () => deleteDocument(d.id))}
                     disabled={pending}
                     title="Delete document"
                   >
@@ -679,6 +681,7 @@ export function ShipmentListView({ shipments, machines }: { shipments: ShipmentV
           </div>
         </div>
       </ResponsiveOverlay>
+      {dialog}
     </div>
   );
 }
