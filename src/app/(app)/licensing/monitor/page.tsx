@@ -2,7 +2,9 @@ import { getExpiringPeople, getExpiringVendorCompanies } from "@/lib/data/licens
 import { LicenseMonitorView } from "@/components/views/license-monitor-view";
 
 export default async function LicenseMonitorPage() {
-  const [people, companies] = await Promise.all([getExpiringPeople(), getExpiringVendorCompanies()]);
+  const [allPeople, allCompanies] = await Promise.all([getExpiringPeople(), getExpiringVendorCompanies()]);
+  const companies = allCompanies.filter((c) => !c.name.includes("DO NOT USE"));
+  const people = allPeople;
 
   return (
     <LicenseMonitorView
@@ -17,6 +19,7 @@ export default async function LicenseMonitorPage() {
       companies={companies.map((c) => ({
         id: c.id,
         name: c.name,
+        status: c.status,
         licenseExpirationDate: c.licenseExpirationDate!.toISOString().slice(0, 10),
       }))}
     />

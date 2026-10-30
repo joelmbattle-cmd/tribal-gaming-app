@@ -97,3 +97,22 @@ export async function unarchiveVendorCompanyAction(companyId: string) {
   revalidatePath("/licensing/vendors");
   revalidatePath(`/licensing/vendors/${companyId}`);
 }
+
+/**
+ * License Monitor: record a renewal reminder for a company. VendorCompany has
+ * no history model yet, so the audit trail is lastModifiedBy + updatedAt only.
+ */
+export async function sendCompanyRenewalReminderAction(companyId: string) {
+  const user = await requireRole("LICENSING");
+  await db.vendorCompany.update({ where: { id: companyId }, data: { lastModifiedBy: user.name } });
+  revalidatePath("/licensing/monitor");
+}
+
+/** License Monitor: flag a vendor company (status → "flagged"). */
+export async function flagVendorCompanyAction(companyId: string) {
+  const user = await requireRole("LICENSING");
+  await db.vendorCompany.update({ where: { id: companyId }, data: { status: "flagged", lastModifiedBy: user.name } });
+  revalidatePath("/licensing/monitor");
+  revalidatePath("/licensing/vendors");
+  revalidatePath(`/licensing/vendors/${companyId}`);
+}

@@ -86,7 +86,11 @@ export function ProfileListView({
   const variant = useShellVariant();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [selected, setSelected] = useState<string | null>(null);
+  // `?person=<id>` deep-link (e.g. from License Monitor) pre-selects that profile's drawer.
+  const [selected, setSelected] = useState<string | null>(() => {
+    const id = searchParams.get("person");
+    return id && people.some((p) => p.id === id) ? id : null;
+  });
   const [drawerTab, setDrawerTab] = useState<ProfileDrawerTab>("overview");
   const [showCreateForm, setShowCreateForm] = useState(false);
   // Holds the id being edited. Cleared whenever the drawer opens or closes,

@@ -8,6 +8,28 @@ export const DEFAULT_LICENSE_TERM_YEARS = 2;
 /** Licenses expiring within this many days are surfaced on the monitor as "expiring soon". */
 export const EXPIRING_SOON_DAYS = 60;
 
+/** License Monitor window: everything expired or due within this many days, bucketed below. */
+export const MONITOR_WINDOW_DAYS = 90;
+
+export type MonitorBucket = "expired" | "d0_30" | "d31_60" | "d61_90";
+export const MONITOR_BUCKETS: MonitorBucket[] = ["expired", "d0_30", "d31_60", "d61_90"];
+export const MONITOR_BUCKET_LABEL: Record<MonitorBucket, string> = {
+  expired: "Expired",
+  d0_30: "0–30 days",
+  d31_60: "31–60 days",
+  d61_90: "61–90 days",
+};
+
+/** Bucket for a days-until-expiry value; null when outside the monitor window. */
+export function monitorBucket(days: number | null): MonitorBucket | null {
+  if (days === null) return null;
+  if (days < 0) return "expired";
+  if (days <= 30) return "d0_30";
+  if (days <= 60) return "d31_60";
+  if (days <= MONITOR_WINDOW_DAYS) return "d61_90";
+  return null;
+}
+
 export function addYears(date: Date, years: number): Date {
   const result = new Date(date);
   result.setFullYear(result.getFullYear() + years);
