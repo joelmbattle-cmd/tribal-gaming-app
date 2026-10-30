@@ -757,9 +757,12 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 82px); }
 --------------------------------------------------------------------------- */
 .plan-outline { position: absolute; overflow: visible; pointer-events: none; }
 .plan-outline-shape { fill: rgba(200, 155, 60, 0.05); stroke: var(--seal-dim); stroke-width: 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.bank-footprint { position: absolute; left: -1px; top: -1px; overflow: visible; pointer-events: none; }
+.bank-footprint { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .bank-footprint polygon { fill: rgba(200, 155, 60, 0.08); stroke: var(--seal); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.bank-cad { background: rgba(26, 34, 43, 0.94); }
+/* CAD banks: fixed to the footprint box; the footprint polygon is the border and
+   content scales down / clips inside it rather than growing the card. */
+.bank-cad { background: rgba(26, 34, 43, 0.94); border-color: transparent; padding: 4px 6px; overflow: hidden; box-shadow: none; }
+.bank-cad .bank-head { margin-bottom: 4px; gap: 4px; }
 .bank-size-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px 0 10px; font-size: 10px; color: var(--parchment-dim); }
 .bank-size-reset { background: none; border: 1px solid var(--hairline-strong); color: var(--parchment-dim); border-radius: 4px; font-size: 10px; padding: 3px 8px; min-height: 26px; cursor: pointer; }
 .bank-size-reset:hover { border-color: var(--seal); color: var(--seal); }

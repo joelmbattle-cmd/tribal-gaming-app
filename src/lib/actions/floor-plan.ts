@@ -12,8 +12,6 @@ import {
   MANUAL_MIN_H,
   MANUAL_MIN_W,
   MAX_BANK_W,
-  MIN_BANK_H,
-  MIN_BANK_W,
   PLAN_PAD,
   validatePlanPayload,
 } from "@/lib/floor-plan/types";
@@ -219,8 +217,8 @@ export async function resizeBankAction(bankId: string, w: number | null, h: numb
     const fp = Array.isArray(bank.footprint) ? (bank.footprint as unknown as Pt[]) : null;
     if (fp && fp.length >= 3) {
       const b = boundsOf(fp);
-      nextW = Math.max(MIN_BANK_W, Math.ceil(b.maxX));
-      nextH = Math.max(MIN_BANK_H, Math.ceil(b.maxY));
+      nextW = Math.max(1, Math.ceil(b.maxX - Math.min(0, b.minX)));
+      nextH = Math.max(1, Math.ceil(b.maxY - Math.min(0, b.minY)));
     } else {
       nextW = null;
       nextH = null;
