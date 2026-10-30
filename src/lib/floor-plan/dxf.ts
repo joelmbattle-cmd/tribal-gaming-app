@@ -29,7 +29,7 @@ import {
 } from "./geometry";
 import type { Bounds, Pt } from "./geometry";
 import { MAX_PLAN_DIM, MAX_RING_POINTS, MIN_BANK_H, MIN_BANK_W } from "./types";
-import type { PlanBankPayload, PlanPayload } from "./types";
+import type { PlanBankPayload, PlanPayload, SeatSpot } from "./types";
 
 export type Shape = { layer: string; handle: string | null; points: Pt[] };
 export type TextItem = { layer: string; at: Pt; value: string };
@@ -288,11 +288,17 @@ export function parseDxfScene(text: string): DxfScene {
 const OUTLINE_HINT = /outline|boundary|perimeter|wall|floor|footprint|envelope|casino|gaming[-_ ]?area/i;
 const BANK_HINT = /bank|slot|egm|machine|gaming|island|carousel/i;
 
-export function guessLayers(scene: DxfScene): { outlineLayers: string[]; bankLayers: string[] } {
+const SEAT_LAYER_HINT = /seat|stand|position/i;
+
+export function guessLayers(scene: DxfScene): { outlineLayers: string[]; bankLayers: string[]; seatLayers: string[] } {
   const withRings = scene.layers.filter((l) => l.rings > 0);
-  const banks = withRings.filter((l) => BANK_HINT.test(l.name)).map((l) => l.name);
-  const outline = withRings.filter((l) => OUTLINE_HINT.test(l.name) && !banks.includes(l.name)).map((l) => l.name);
-  return { outlineLayers: outline, bankLayers: banks };
+  // Seat/stand layers (one small shape per machine) are never bank layers.
+  const seats = withRings.filter((l) => SEAT_LAYER_HINT.test(l.name) && !/text|label/i.test(l.name)).map((l) => l.name);
+  const banks = withRings.filter((l) => BANK_HINT.test(l.name) && !seats.includes(l.name)).map((l) => l.name);
+  const outline = withRings
+    .filter((l) => OUTLINE_HINT.test(l.name) && !banks.includes(l.name) && !seats.includes(l.name))
+    .map((l) => l.name);
+  return { outlineLayers: outline, bankLayers: banks, seatLayers: seats };
 }
 
 export type PlanOptions = {
@@ -302,9 +308,12 @@ export type PlanOptions = {
   targetWidth: number;
 };
 
+/** One machine position from the drawing's seat layer, in drawing units. */
+export type ExtractedSeat = { center: Pt; size: number; stand: number | null };
+
 export type ExtractedPlan = {
   outline: Pt[][]; // drawing units, y-up
-  banks: { ref: string; label: string; points: Pt[] }[];
+  banks: { ref: string; label: string; points: Pt[]; seats: ExtractedSeat[] }[];
   bounds: Bounds;
   warnings: string[];
 };
@@ -338,10 +347,52 @@ export function pickLabel(ring: Pt[], texts: TextItem[]): string | null {
   return (pool.find((t) => /\d/.test(t.value)) ?? pool[0]).value;
 }
 
-export function extractPlan(scene: DxfScene, opts: Pick<PlanOptions, "outlineLayers" | "bankLayers">): ExtractedPlan {
+/**
+ * Seats (machine positions) inside a bank: closed shapes on the seat layer(s)
+ * whose centre falls inside the bank footprint. Each seat's stand number comes
+ * from the text inside it ("01" → stand 1). Machines are placed by Excel
+ * Bank + Stand, so seat N in the drawing is seatIndex N-1 on the map.
+ */
+export function seatsForBank(ring: Pt[], seatRings: Shape[], texts: TextItem[]): ExtractedSeat[] {
+  const out: ExtractedSeat[] = [];
+  for (const s of seatRings) {
+    const c = polygonCentroid(s.points);
+    if (!pointInPolygon(c, ring)) continue;
+    const b = boundsOf(s.points);
+    const size = Math.max(b.maxX - b.minX, b.maxY - b.minY);
+    const inside = texts.filter((t) => /^\s*\d{1,3}\s*$/.test(t.value) && pointInPolygon(t.at, s.points));
+    inside.sort((a, b2) => labelRank(b2) - labelRank(a)); // seat-text layers first
+    const stand = inside.length ? parseInt(inside[0].value, 10) : null;
+    out.push({ center: c, size, stand: stand && stand > 0 ? stand : null });
+  }
+  return out;
+}
+
+/**
+ * Orders a bank's seats by seat index: numbered seats at stand-1, unnumbered
+ * (or duplicate-numbered) seats fill the remaining gaps in reading order.
+ */
+export function orderSeats<T extends ExtractedSeat>(seats: T[]): (T | null)[] {
+  const slots: (T | null)[] = [];
+  const rest: T[] = [];
+  for (const s of seats) {
+    if (s.stand && s.stand <= 200 && !slots[s.stand - 1]) slots[s.stand - 1] = s;
+    else rest.push(s);
+  }
+  rest.sort((a, b) => b.center[1] - a.center[1] || a.center[0] - b.center[0]);
+  for (let i = 0; rest.length; i++) if (!slots[i]) slots[i] = rest.shift()!;
+  return Array.from({ length: slots.length }, (_, i) => slots[i] ?? null);
+}
+
+export function extractPlan(
+  scene: DxfScene,
+  opts: Pick<PlanOptions, "outlineLayers" | "bankLayers"> & { seatLayers?: string[] },
+): ExtractedPlan {
   const warnings: string[] = [];
   const outlineSet = new Set(opts.outlineLayers);
   const bankSet = new Set(opts.bankLayers);
+  const seatSet = new Set((opts.seatLayers ?? []).filter((l) => !bankSet.has(l)));
+  const seatRings = scene.rings.filter((r) => seatSet.has(r.layer));
 
   const bankRings = scene.rings.filter((r) => bankSet.has(r.layer));
   if (!bankRings.length) throw new Error("No closed bank shapes found on the selected bank layer(s).");
@@ -406,8 +457,13 @@ export function extractPlan(scene: DxfScene, opts: Pick<PlanOptions, "outlineLay
     const base = label;
     for (let n = 2; used.has(label.toLowerCase()); n++) label = `${base} (${n})`;
     used.add(label.toLowerCase());
-    return { ref: k.handle ? `h:${k.handle}` : `l:${label.toLowerCase()}`, label, points: k.points };
+    const seats = seatRings.length ? seatsForBank(k.points, seatRings, scene.texts) : [];
+    return { ref: k.handle ? `h:${k.handle}` : `l:${label.toLowerCase()}`, label, points: k.points, seats };
   });
+  if (seatRings.length) {
+    const placed = banks.reduce((n, b) => n + b.seats.length, 0);
+    if (placed < seatRings.length) warnings.push(`${seatRings.length - placed} seat shape(s) are not inside any bank and were ignored.`);
+  }
   if (unlabeled) warnings.push(`${unlabeled} bank(s) had no text label inside them and were named "Bank N" — rename in Edit Layout or match by column in the Excel step.`);
 
   return { outline, banks, bounds: allBounds, warnings };
@@ -457,6 +513,12 @@ export function layoutPlan(
       w,
       h,
       footprint: px.map((p): Pt => [r1(p[0] - x), r1(p[1] - y)]),
+      // CAD seat spots [cx, cy, size] relative to the card, indexed by seatIndex (stand - 1).
+      seats: orderSeats(bank.seats).map((st) => {
+        if (!st) return null;
+        const c = toPx(st.center);
+        return [r1(c[0] - x), r1(c[1] - y), r1(Math.max(1, st.size * scale))] as SeatSpot;
+      }),
     };
   });
   if (tooSmall) {

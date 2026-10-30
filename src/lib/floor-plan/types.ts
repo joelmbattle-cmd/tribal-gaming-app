@@ -21,6 +21,21 @@ export const PLAN_PAD = 24;
 /** Minimum clear space kept between imported bank cards. */
 export const BANK_GUTTER = 16;
 
+/** A CAD seat (machine) position: centre x, centre y and size, in px relative to the bank card's top-left. */
+export type SeatSpot = [number, number, number];
+export const MAX_BANK_SEATS = 200;
+
+export function isSeatSpot(v: unknown): v is SeatSpot {
+  return Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n)) && v[2] > 0;
+}
+
+/** Seat spots by seatIndex (null = no drawn seat at that index), or null when the bank has none. */
+export function asSeatSpots(v: unknown): (SeatSpot | null)[] | null {
+  if (!Array.isArray(v) || !v.length || v.length > MAX_BANK_SEATS) return null;
+  const out = v.map((s) => (isSeatSpot(s) ? s : null));
+  return out.some(Boolean) ? out : null;
+}
+
 export type PlanBankPayload = {
   /** Stable id within the plan (DXF handle, else lower-cased label) — lets a re-import update instead of duplicate. */
   ref: string;
@@ -32,6 +47,8 @@ export type PlanBankPayload = {
   h: number;
   /** Exact footprint polygon, relative to the card's top-left. */
   footprint: Pt[];
+  /** CAD seat spots indexed by seatIndex (stand - 1). Empty when the drawing has no seat layer. */
+  seats?: (SeatSpot | null)[];
 };
 
 export type PlanPayload = {
@@ -79,7 +96,8 @@ export function validatePlanPayload(input: unknown): PlanPayload {
       b.x >= 0 && b.y >= 0 && b.x <= MAX_PLAN_DIM && b.y <= MAX_PLAN_DIM;
     if (!ok) throw new Error(`Bank "${label}" has an invalid position or size.`);
     if (!validRing(b.footprint)) throw new Error(`Bank "${label}" has an invalid footprint.`);
-    return { ref, label, x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h), footprint: b.footprint };
+    const seats = asSeatSpots(b.seats) ?? [];
+    return { ref, label, x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h), footprint: b.footprint, seats };
   });
   return {
     name,

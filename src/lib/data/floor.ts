@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { BANK_W } from "@/lib/floor-constants";
-import { PLAN_PAD } from "@/lib/floor-plan/types";
+import { PLAN_PAD, asSeatSpots } from "@/lib/floor-plan/types";
 import { isFinitePt } from "@/lib/floor-plan/geometry";
 import type { Pt } from "@/lib/floor-plan/geometry";
 
@@ -24,7 +24,9 @@ export async function getFloorMapData() {
   ]);
 
   const banksOut = banks.map((b) => {
-    const seats = Array.from({ length: b.capacity }, (_, i) => {
+    // Never hide a seated machine: a bank shows at least up to its highest seat.
+    const capacity = b.machines.reduce((c, m) => (m.seatIndex != null && m.seatIndex < 200 ? Math.max(c, m.seatIndex + 1) : c), b.capacity);
+    const seats = Array.from({ length: capacity }, (_, i) => {
       const m = b.machines.find((mm) => mm.seatIndex === i);
       return m
         ? { id: m.id, serial: m.serial, model: m.model, complianceStatus: m.complianceStatus }
@@ -36,11 +38,13 @@ export async function getFloorMapData() {
       areaId: b.areaId,
       x: b.x,
       y: b.y,
-      capacity: b.capacity,
+      capacity,
       // Null = default card (every pre-existing bank); set by CAD import / manual resize.
       w: b.w,
       h: b.h,
       footprint: asRing(b.footprint),
+      // CAD seat positions by seatIndex — machines render on these spots.
+      seatSpots: asSeatSpots(b.seatSpots),
       seats,
     };
   });
