@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 import { BANK_W } from "@/lib/floor-constants";
 import { ASSIGN_CREATE, ASSIGN_SKIP, buildBankMatcher, normalizeBankName } from "@/lib/floor-plan/bank-match";
+import { SOURCE_FIELDS, formatSourceField, sourceFieldsFromImportRow } from "@/lib/machine-source-fields";
 import type { ComplianceStatus, LifecycleStatus } from "@/generated/prisma/enums";
 import type { Bank } from "@/generated/prisma/client";
 
@@ -31,6 +32,7 @@ export async function getMachinesForExportAction() {
       "Compliance Status": STATUS_LABEL[m.complianceStatus],
       "Software Status": m.softwareStatus,
       "Status Since": m.statusSince.toISOString().slice(0, 10),
+      ...Object.fromEntries(SOURCE_FIELDS.map((f) => [f.importKey, formatSourceField(f.key, m[f.key])])),
       "Documents Attached": m.documents.length,
       "Last Audit Event": lastEvent?.event ?? "",
       "Last Audit Date": lastEvent ? lastEvent.date.toISOString().slice(0, 10) : "",
@@ -206,6 +208,7 @@ export async function importMachinesAction(rows: ImportRow[], opts: ImportOption
       if (row["Software Status"]) data.softwareStatus = String(row["Software Status"]);
       if (statusSince) data.statusSince = statusSince;
       if (lifecycle) data.lifecycleStatus = lifecycle;
+      Object.assign(data, sourceFieldsFromImportRow(row, { skipBlank: true }));
 
       await db.machine.update({ where: { serial }, data });
       await db.machineHistory.create({ data: { machineId: existing.id, event: "Record updated via Excel import" } });
@@ -234,6 +237,7 @@ export async function importMachinesAction(rows: ImportRow[], opts: ImportOption
           ...(lifecycle ? { lifecycleStatus: lifecycle } : {}),
           softwareStatus: String(row["Software Status"] || "Compliant"),
           statusSince: statusSince ?? new Date(),
+          ...sourceFieldsFromImportRow(row, { skipBlank: true }),
           bankId: bank.id,
           seatIndex,
           history: { create: [{ event: `Imported via Excel — added to ${bank.name}` }] },

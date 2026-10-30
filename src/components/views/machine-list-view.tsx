@@ -11,6 +11,7 @@ import { downloadImportTemplate, exportRowsToExcel, readWorkbookRows } from "@/l
 import { getMachinesForExportAction, importMachinesAction } from "@/lib/actions/import-export";
 import { createMachineAction } from "@/lib/actions/machines";
 import { BankCombobox, NEW_BANK_VALUE } from "@/components/bank-combobox";
+import { EMPTY_SOURCE_FORM, SOURCE_FIELDS } from "@/lib/machine-source-fields";
 import type { MachineListItem } from "@/lib/data/machines";
 import type { BankOption, FloorArea } from "@/lib/data/floor";
 
@@ -42,6 +43,7 @@ export function MachineListView({
   const [theme, setTheme] = useState("");
   const [parSheet, setParSheet] = useState("");
   const [sealNumber, setSealNumber] = useState("");
+  const [source, setSource] = useState(EMPTY_SOURCE_FORM);
   const [bankId, setBankId] = useState("");
   const [newBankName, setNewBankName] = useState("");
   const [newBankCapacity, setNewBankCapacity] = useState("4");
@@ -79,6 +81,7 @@ export function MachineListView({
     setTheme("");
     setParSheet("");
     setSealNumber("");
+    setSource(EMPTY_SOURCE_FORM);
     setBankId("");
     setNewBankName("");
     setNewBankCapacity("4");
@@ -106,6 +109,7 @@ export function MachineListView({
           theme: theme.trim(),
           parSheet: parSheet.trim(),
           sealNumber: sealNumber.trim(),
+          source,
           bankId: !creatingBank && bankId ? bankId : undefined,
           newBank: creatingBank
             ? { name: newBankName.trim(), areaKey: newBankAreaKey, capacity: parseInt(newBankCapacity, 10) || 4 }
@@ -377,6 +381,19 @@ export function MachineListView({
                 disabled={pending}
               />
             </div>
+            {SOURCE_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label className="field-label">{f.label}</label>
+                <input
+                  type="text"
+                  placeholder={f.placeholder ? `Optional — ${f.placeholder}` : "Optional"}
+                  value={source[f.key]}
+                  onChange={(e) => setSource((s) => ({ ...s, [f.key]: e.target.value }))}
+                  className="field-input"
+                  disabled={pending}
+                />
+              </div>
+            ))}
           </div>
 
           <div style={{ marginTop: 16, display: "flex", gap: 8, flexDirection: "column" }}>

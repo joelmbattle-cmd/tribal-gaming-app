@@ -13,6 +13,8 @@ import {
   type MachineDrawerData,
 } from "@/lib/actions/machines";
 import { BankCombobox, NEW_BANK_VALUE } from "@/components/bank-combobox";
+import { SOURCE_FIELDS, formatSourceField, sourceFieldFormValue } from "@/lib/machine-source-fields";
+import { MachineFieldsMenu, useHiddenMachineFields } from "@/lib/machine-field-visibility";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
 
 const STATUS_LABEL: Record<ComplianceStatus, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
@@ -59,6 +61,7 @@ export function MachineDrawerContent({
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const showToast = useToast();
+  const { isShown } = useHiddenMachineFields();
 
   const load = () => {
     getMachineDrawerDataAction(serial).then(setData);
@@ -116,6 +119,7 @@ export function MachineDrawerContent({
           theme: String(form.get("theme") || ""),
           parSheet: String(form.get("par") || ""),
           sealNumber: String(form.get("seal") || ""),
+          source: Object.fromEntries(SOURCE_FIELDS.map((f) => [f.key, String(form.get(f.key) || "")])),
         });
         await updateMachineBankAction(serial, {
           bankId: !creatingBank && bankChoice ? bankChoice : undefined,
@@ -198,6 +202,7 @@ export function MachineDrawerContent({
           <div className="p-id" style={{ marginTop: 4 }}>{data.serial} · {data.bankName}</div>
         </div>
         <div className="drawer-head-actions">
+          <MachineFieldsMenu />
           {!editing && !data.archived && <button className="btn btn-small" onClick={startEdit}>Edit</button>}
           <button className="drawer-close" onClick={onClose}>✕</button>
         </div>
@@ -256,11 +261,18 @@ export function MachineDrawerContent({
               )}
               <div><div className="field-label">Serial Number</div><div className="field-value">{data.serial}</div></div>
               <div><div className="field-label">Asset Number</div><div className="field-value">—</div></div>
-              <div><div className="field-label">Manufacturer</div><input className="field-input" name="mfr" defaultValue={data.manufacturer} /></div>
-              <div><div className="field-label">Model</div><input className="field-input" name="model" defaultValue={data.model} /></div>
-              <div><div className="field-label">Game Theme</div><input className="field-input" name="theme" defaultValue={data.theme} /></div>
-              <div><div className="field-label">PAR Sheet</div><input className="field-input" name="par" defaultValue={data.parSheet} /></div>
-              <div><div className="field-label">Seal Number</div><input className="field-input" name="seal" defaultValue={data.sealNumber} placeholder="e.g. SL-77291" /></div>
+              {isShown("manufacturer") ? <div><div className="field-label">Manufacturer</div><input className="field-input" name="mfr" defaultValue={data.manufacturer} /></div> : <input type="hidden" name="mfr" defaultValue={data.manufacturer} />}
+              {isShown("model") ? <div><div className="field-label">Model</div><input className="field-input" name="model" defaultValue={data.model} /></div> : <input type="hidden" name="model" defaultValue={data.model} />}
+              {isShown("theme") ? <div><div className="field-label">Game Theme</div><input className="field-input" name="theme" defaultValue={data.theme} /></div> : <input type="hidden" name="theme" defaultValue={data.theme} />}
+              {isShown("parSheet") ? <div><div className="field-label">PAR Sheet</div><input className="field-input" name="par" defaultValue={data.parSheet} /></div> : <input type="hidden" name="par" defaultValue={data.parSheet} />}
+              {isShown("sealNumber") ? <div><div className="field-label">Seal Number</div><input className="field-input" name="seal" defaultValue={data.sealNumber} placeholder="e.g. SL-77291" /></div> : <input type="hidden" name="seal" defaultValue={data.sealNumber} />}
+              {SOURCE_FIELDS.map((f) =>
+                isShown(f.key) ? (
+                  <div key={f.key}><div className="field-label">{f.label}</div><input className="field-input" name={f.key} defaultValue={sourceFieldFormValue(f.key, data.source[f.key])} placeholder={f.placeholder} /></div>
+                ) : (
+                  <input key={f.key} type="hidden" name={f.key} defaultValue={sourceFieldFormValue(f.key, data.source[f.key])} />
+                ),
+              )}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="submit" className="btn btn-primary" disabled={pending}>Save Changes</button>
@@ -270,13 +282,16 @@ export function MachineDrawerContent({
         ) : (
           <div className="field-grid">
             <div><div className="field-label">Serial Number</div><div className="field-value">{data.serial}</div></div>
-            <div><div className="field-label">Manufacturer</div><div className="field-value">{data.manufacturer}</div></div>
-            <div><div className="field-label">Model</div><div className="field-value">{data.model}</div></div>
-            <div><div className="field-label">Game Theme</div><div className="field-value">{data.theme}</div></div>
-            <div><div className="field-label">PAR Sheet</div><div className="field-value">{data.parSheet}</div></div>
-            <div><div className="field-label">Seal Number</div><div className="field-value">{data.sealNumber || "— not sealed —"}</div></div>
-            <div><div className="field-label">Lifecycle Status</div><div className="field-value">{LIFECYCLE_LABEL[data.lifecycleStatus]}</div></div>
-            <div><div className="field-label">Highlight / Flag</div><div className="field-value">{HIGHLIGHT_LABEL[data.highlightFlag]}</div></div>
+            {isShown("manufacturer") && <div><div className="field-label">Manufacturer</div><div className="field-value">{data.manufacturer}</div></div>}
+            {isShown("model") && <div><div className="field-label">Model</div><div className="field-value">{data.model}</div></div>}
+            {isShown("theme") && <div><div className="field-label">Game Theme</div><div className="field-value">{data.theme}</div></div>}
+            {isShown("parSheet") && <div><div className="field-label">PAR Sheet</div><div className="field-value">{data.parSheet}</div></div>}
+            {isShown("sealNumber") && <div><div className="field-label">Seal Number</div><div className="field-value">{data.sealNumber || "— not sealed —"}</div></div>}
+            {SOURCE_FIELDS.filter((f) => isShown(f.key)).map((f) => (
+              <div key={f.key}><div className="field-label">{f.label}</div><div className="field-value">{formatSourceField(f.key, data.source[f.key]) || "—"}</div></div>
+            ))}
+            {isShown("lifecycleStatus") && <div><div className="field-label">Lifecycle Status</div><div className="field-value">{LIFECYCLE_LABEL[data.lifecycleStatus]}</div></div>}
+            {isShown("highlightFlag") && <div><div className="field-label">Highlight / Flag</div><div className="field-value">{HIGHLIGHT_LABEL[data.highlightFlag]}</div></div>}
           </div>
         )}
 
