@@ -8,6 +8,7 @@ import { importMachinesAction } from "@/lib/actions/import-export";
 import { NO_PLAN_MATCH_ERROR, PLAN_FIRST_ERROR } from "@/lib/import-gate";
 import { extractPlan, guessLayers, layoutPlan, parseDxfScene } from "@/lib/floor-plan/dxf";
 import type { DxfScene } from "@/lib/floor-plan/dxf";
+import { parsePdfScene } from "@/lib/floor-plan/pdf";
 import { ASSIGN_CREATE, ASSIGN_SKIP, buildBankMatcher } from "@/lib/floor-plan/bank-match";
 import { IMPORT_FIELDS, applyMapping, guessMapping } from "@/lib/floor-plan/excel-columns";
 import type { ColumnMapping, ImportFieldKey } from "@/lib/floor-plan/excel-columns";
@@ -64,7 +65,7 @@ export function FloorSetupDialog({
 
         <div className="setup-tabs" role="tablist">
           <button role="tab" aria-selected={step === "cad"} className={`setup-tab${step === "cad" ? " active" : ""}`} onClick={() => setStep("cad")}>
-            1 · Floor plan (DXF)
+            1 · Floor plan (DXF / PDF)
           </button>
           <button role="tab" aria-selected={step === "excel"} className={`setup-tab${step === "excel" ? " active" : ""}`} onClick={() => setStep("excel")}>
             2 · Machines (Excel)
@@ -133,27 +134,29 @@ function CadStep({
       setError("DWG is AutoCAD's proprietary binary format, which can't be read reliably in the browser. In AutoCAD choose SAVEAS → “AutoCAD DXF” (2013 or later) and upload that file.");
       return;
     }
-    if (!/\.dxf$/i.test(file.name)) {
-      setError("Please choose a .dxf file.");
+    const isPdf = /\.pdf$/i.test(file.name);
+    if (!isPdf && !/\.dxf$/i.test(file.name)) {
+      setError("Please choose a .dxf or vector CAD .pdf file.");
       return;
     }
     if (file.size > MAX_DXF_BYTES) {
-      setError("That DXF is over 60 MB. Purge unused blocks/layers in AutoCAD (PURGE) or export just the gaming floor.");
+      setError(`That ${isPdf ? "PDF" : "DXF"} is over 60 MB. Purge unused blocks/layers in AutoCAD (PURGE) or export just the gaming floor.`);
       return;
     }
     setBusy("Reading drawing…");
     await new Promise((r) => setTimeout(r, 30)); // let the busy state paint before the synchronous parse
     try {
-      const parsed = parseDxfScene(await file.text());
+      // PDF and DXF both produce the same scene → same banks / labels / seats pipeline.
+      const parsed = isPdf ? await parsePdfScene(await file.arrayBuffer()) : parseDxfScene(await file.text());
       const guess = guessLayers(parsed);
       setScene(parsed);
       setFileName(file.name);
-      setPlanName(file.name.replace(/\.dxf$/i, "").replace(/[_-]+/g, " ").trim() || "Imported floor");
+      setPlanName(file.name.replace(/\.(dxf|pdf)$/i, "").replace(/[_-]+/g, " ").trim() || "Imported floor");
       setOutlineLayers(guess.outlineLayers);
       setBankLayers(guess.bankLayers);
       setSeatLayers(guess.seatLayers);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not read that DXF.");
+      setError(err instanceof Error ? err.message : `Could not read that ${isPdf ? "PDF" : "DXF"}.`);
     } finally {
       setBusy(null);
     }
@@ -208,13 +211,13 @@ function CadStep({
   return (
     <div className="setup-step">
       <p className="setup-help">
-        Upload a <b>DXF</b> export of your gaming floor. We read the floor outline and one closed shape per bank, keep their true
-        proportions, and place every bank at its drawn position. DWG files: use <span className="mono">SAVEAS → AutoCAD DXF</span> first.
+        Upload a <b>DXF</b> or <b>vector CAD PDF</b> (plotted with layers) of your gaming floor. We read the floor outline and one closed shape per bank, keep their true
+        proportions, and place every bank at its drawn position. DWG files: use <span className="mono">SAVEAS → AutoCAD DXF</span> first. Scanned/image PDFs aren&apos;t supported.
       </p>
 
       <label className="setup-file">
-        <input type="file" accept=".dxf" onChange={onFile} disabled={!!busy} />
-        <span className="btn">{scene ? "Choose a different DXF…" : "Choose DXF file…"}</span>
+        <input type="file" accept=".dxf,.pdf,application/pdf" onChange={onFile} disabled={!!busy} />
+        <span className="btn">{scene ? "Choose a different DXF / PDF…" : "Choose DXF or PDF file…"}</span>
         {fileName && <span className="mono setup-filename">{fileName}</span>}
       </label>
 
@@ -286,7 +289,7 @@ function CadStep({
                 <button className="btn btn-primary" onClick={apply} disabled={!!busy || !!applied || ready.laid.plan.banks.length > MAX_PLAN_BANKS}>
                   {applied ? "✓ Created" : targetPlanId ? "Update floor plan" : "Create floor plan"}
                 </button>
-                {applied && <span className="setup-note">Choose a different DXF to import another floor, or continue to step 2.</span>}
+                {applied && <span className="setup-note">Choose a different DXF or PDF to import another floor, or continue to step 2.</span>}
               </div>
             </>
           )}
