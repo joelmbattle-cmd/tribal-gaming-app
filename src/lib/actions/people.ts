@@ -52,8 +52,7 @@ export async function createPersonAction(intake: PersonIntake) {
       status: intake.status,
       dateOfBirth: toDateOrNull(intake.dateOfBirth),
       contactInfo: intake.contactInfo || null,
-      // Omitted ssn = leave unchanged (the edit form only knows last-4).
-      ...(intake.ssn !== undefined ? { ssn: intake.ssn || null } : {}),
+      ssn: intake.ssn || null,
       position: intake.position || null,
       jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
@@ -125,7 +124,8 @@ export async function updatePersonAction(personId: string, intake: PersonUpdate)
       status: intake.status,
       dateOfBirth: toDateOrNull(intake.dateOfBirth),
       contactInfo: intake.contactInfo || null,
-      ssn: intake.ssn || null,
+      // Omitted ssn = leave unchanged (the edit form only sends ssn when a new value is typed).
+      ...(intake.ssn !== undefined ? { ssn: intake.ssn.trim() || null } : {}),
       position: intake.position || null,
       jobDescription: intake.jobDescription || null,
       licenseType: intake.licenseType || null,
