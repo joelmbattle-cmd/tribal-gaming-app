@@ -28,7 +28,7 @@ import {
   simplifyToMax,
 } from "./geometry";
 import type { Bounds, Pt } from "./geometry";
-import { MAX_RING_POINTS, MIN_BANK_H, MIN_BANK_W } from "./types";
+import { BANK_GUTTER, MAX_PLAN_DIM, MAX_RING_POINTS, MIN_BANK_H, MIN_BANK_W } from "./types";
 import type { PlanBankPayload, PlanPayload } from "./types";
 
 export type Shape = { layer: string; handle: string | null; points: Pt[] };
@@ -316,12 +316,26 @@ function displayLabel(raw: string): string {
   return /^[A-Za-z]?\d+[A-Za-z]?$/.test(t) ? `Bank ${t}` : t;
 }
 
-function pickLabel(ring: Pt[], texts: TextItem[]): string | null {
+const SEAT_TEXT_HINT = /seat|machine|egm|position/i;
+const BANK_TEXT_HINT = /bank/i;
+
+function labelRank(t: TextItem): number {
+  // Lower is better: bank-text layers first, then anything that isn't a
+  // per-seat layer, and seat numbers ("01", "08") only as a last resort.
+  if (BANK_TEXT_HINT.test(t.layer)) return 0;
+  if (SEAT_TEXT_HINT.test(t.layer)) return 2;
+  return 1;
+}
+
+export function pickLabel(ring: Pt[], texts: TextItem[]): string | null {
   const inside = texts.filter((t) => pointInPolygon(t.at, ring));
   if (!inside.length) return null;
-  // Reading order: top-to-bottom, then left-to-right; prefer a tag containing a digit.
-  inside.sort((a, b) => b.at[1] - a.at[1] || a.at[0] - b.at[0]);
-  return (inside.find((t) => /\d/.test(t.value)) ?? inside[0]).value;
+  // Best layer first, then reading order (top-to-bottom, left-to-right);
+  // within a rank prefer a tag containing a digit.
+  inside.sort((a, b) => labelRank(a) - labelRank(b) || b.at[1] - a.at[1] || a.at[0] - b.at[0]);
+  const best = labelRank(inside[0]);
+  const pool = inside.filter((t) => labelRank(t) === best);
+  return (pool.find((t) => /\d/.test(t.value)) ?? pool[0]).value;
 }
 
 export function extractPlan(scene: DxfScene, opts: Pick<PlanOptions, "outlineLayers" | "bankLayers">): ExtractedPlan {
@@ -422,18 +436,39 @@ export function layoutPlan(
 
   const outline = extracted.outline.map((ring) => simplifyToMax(ring.map(toPx), 0.4, MAX_RING_POINTS).map((p): Pt => [r1(p[0]), r1(p[1])]));
 
-  let tooSmall = 0;
-  const banks: PlanBankPayload[] = extracted.banks.map((bank) => {
+  // Footprint boxes first, so each card's growth can be limited by its
+  // nearest neighbour: a card never grows past half the clearance (minus a
+  // gutter), which keeps every pair of cards at least BANK_GUTTER apart and
+  // labels on their own bank instead of stacking over neighbours.
+  const boxes = extracted.banks.map((bank) => {
     const px = simplifyToMax(bank.points.map(toPx), 0.3, MAX_RING_POINTS);
-    const pb = boundsOf(px);
+    return { bank, px, pb: boundsOf(px) };
+  });
+  const clearance = boxes.map(({ pb: a }, i) => {
+    let c = Infinity;
+    for (let j = 0; j < boxes.length; j++) {
+      if (j === i) continue;
+      const b = boxes[j].pb;
+      const gx = Math.max(b.minX - a.maxX, a.minX - b.maxX);
+      const gy = Math.max(b.minY - a.maxY, a.minY - b.maxY);
+      c = Math.min(c, Math.max(gx, gy));
+    }
+    return c;
+  });
+
+  let tooSmall = 0;
+  const banks: PlanBankPayload[] = boxes.map(({ bank, px, pb }, i) => {
     const fw = pb.maxX - pb.minX;
     const fh = pb.maxY - pb.minY;
-    const w = Math.max(Math.round(fw), minBank.w);
-    const h = Math.max(Math.round(fh), minBank.h);
-    if (fw < minBank.w || fh < minBank.h) tooSmall++;
+    const room = Math.max(0, Math.floor((clearance[i] - BANK_GUTTER) / 2));
+    const padX = Math.min(Math.max(0, (minBank.w - fw) / 2), room);
+    const padY = Math.min(Math.max(0, (minBank.h - fh) / 2), room);
+    const w = Math.round(fw + padX * 2);
+    const h = Math.round(fh + padY * 2);
+    if (w < minBank.w || h < minBank.h) tooSmall++;
     // Card centred on the footprint; footprint stored relative to card origin.
-    const x = Math.round(pb.minX - (w - fw) / 2);
-    const y = Math.round(pb.minY - (h - fh) / 2);
+    const x = Math.round(pb.minX - padX);
+    const y = Math.round(pb.minY - padY);
     return {
       ref: bank.ref,
       label: bank.label,
@@ -445,8 +480,14 @@ export function layoutPlan(
     };
   });
   if (tooSmall) {
+    // Width at which most (~90%) footprints reach the readable minimum.
+    const ratios = boxes
+      .map(({ pb }) => Math.max(minBank.w / Math.max(1, pb.maxX - pb.minX), minBank.h / Math.max(1, pb.maxY - pb.minY)))
+      .sort((a, b) => a - b);
+    const suggest = Math.min(MAX_PLAN_DIM, Math.ceil((targetWidth * ratios[Math.floor(ratios.length * 0.9)]) / 400) * 400);
     warnings.push(
-      `${tooSmall} bank(s) are smaller than a readable seat grid at this scale, so their cards are drawn at a minimum size (footprints stay exact). Increase the plan width or use Edit Layout → resize.`,
+      `${tooSmall} bank(s) are too close together to show a full seat grid at this scale, so their cards are kept to their own space instead of overlapping neighbours.` +
+        (suggest > targetWidth ? ` For larger cards, increase the plan width (try ~${suggest}px).` : " Use Edit Layout → resize for any that need more room."),
     );
   }
 
