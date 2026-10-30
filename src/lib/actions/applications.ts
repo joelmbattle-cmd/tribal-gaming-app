@@ -67,11 +67,12 @@ export async function createApplicationAction(intake: ApplicationIntake) {
 
 export async function markApplicationSubmittedAction(applicationId: string) {
   await requireRole("LICENSING");
-  await db.application.update({
+  const app = await db.application.update({
     where: { id: applicationId },
     data: { progress: "Submitted", submittedAt: new Date() },
   });
   revalidatePath("/licensing/applications");
+  if (app.vendorCompanyId) revalidatePath(`/licensing/vendors/${app.vendorCompanyId}`);
 }
 
 export async function rejectApplicationAction(applicationId: string) {
