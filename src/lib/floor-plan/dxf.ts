@@ -28,7 +28,7 @@ import {
   simplifyToMax,
 } from "./geometry";
 import type { Bounds, Pt } from "./geometry";
-import { BANK_GUTTER, MAX_PLAN_DIM, MAX_RING_POINTS, MIN_BANK_H, MIN_BANK_W } from "./types";
+import { MAX_PLAN_DIM, MAX_RING_POINTS, MIN_BANK_H, MIN_BANK_W } from "./types";
 import type { PlanBankPayload, PlanPayload } from "./types";
 
 export type Shape = { layer: string; handle: string | null; points: Pt[] };
@@ -436,39 +436,19 @@ export function layoutPlan(
 
   const outline = extracted.outline.map((ring) => simplifyToMax(ring.map(toPx), 0.4, MAX_RING_POINTS).map((p): Pt => [r1(p[0]), r1(p[1])]));
 
-  // Footprint boxes first, so each card's growth can be limited by its
-  // nearest neighbour: a card never grows past half the clearance (minus a
-  // gutter), which keeps every pair of cards at least BANK_GUTTER apart and
-  // labels on their own bank instead of stacking over neighbours.
   const boxes = extracted.banks.map((bank) => {
     const px = simplifyToMax(bank.points.map(toPx), 0.3, MAX_RING_POINTS);
     return { bank, px, pb: boundsOf(px) };
   });
-  const clearance = boxes.map(({ pb: a }, i) => {
-    let c = Infinity;
-    for (let j = 0; j < boxes.length; j++) {
-      if (j === i) continue;
-      const b = boxes[j].pb;
-      const gx = Math.max(b.minX - a.maxX, a.minX - b.maxX);
-      const gy = Math.max(b.minY - a.maxY, a.minY - b.maxY);
-      c = Math.min(c, Math.max(gx, gy));
-    }
-    return c;
-  });
-
+  // Cards are exactly the footprint's bounding box: the CAD bank border is the
+  // source of truth, so cards never grow past it (no overlaps, no mismatch).
   let tooSmall = 0;
-  const banks: PlanBankPayload[] = boxes.map(({ bank, px, pb }, i) => {
-    const fw = pb.maxX - pb.minX;
-    const fh = pb.maxY - pb.minY;
-    const room = Math.max(0, Math.floor((clearance[i] - BANK_GUTTER) / 2));
-    const padX = Math.min(Math.max(0, (minBank.w - fw) / 2), room);
-    const padY = Math.min(Math.max(0, (minBank.h - fh) / 2), room);
-    const w = Math.round(fw + padX * 2);
-    const h = Math.round(fh + padY * 2);
+  const banks: PlanBankPayload[] = boxes.map(({ bank, px, pb }) => {
+    const x = Math.round(pb.minX);
+    const y = Math.round(pb.minY);
+    const w = Math.max(1, Math.round(pb.maxX - pb.minX));
+    const h = Math.max(1, Math.round(pb.maxY - pb.minY));
     if (w < minBank.w || h < minBank.h) tooSmall++;
-    // Card centred on the footprint; footprint stored relative to card origin.
-    const x = Math.round(pb.minX - padX);
-    const y = Math.round(pb.minY - padY);
     return {
       ref: bank.ref,
       label: bank.label,
@@ -486,8 +466,8 @@ export function layoutPlan(
       .sort((a, b) => a - b);
     const suggest = Math.min(MAX_PLAN_DIM, Math.ceil((targetWidth * ratios[Math.floor(ratios.length * 0.9)]) / 400) * 400);
     warnings.push(
-      `${tooSmall} bank(s) are too close together to show a full seat grid at this scale, so their cards are kept to their own space instead of overlapping neighbours.` +
-        (suggest > targetWidth ? ` For larger cards, increase the plan width (try ~${suggest}px).` : " Use Edit Layout → resize for any that need more room."),
+      `${tooSmall} bank(s) are small at this scale; cards match their CAD borders exactly, so labels are compacted to fit.` +
+        (suggest > targetWidth ? ` For roomier cards, increase the plan width (try ~${suggest}px).` : ""),
     );
   }
 

@@ -974,10 +974,26 @@ function BankView({
   onDrop: (seat: number) => void;
 }) {
   const occupiedCount = bank.seats.filter((s) => s).length;
+  // CAD banks: the footprint (bank layer border) is the source of truth. The
+  // card is drawn exactly over the footprint's bounding box — fixed size, no
+  // growth for content — so it lines up with the plan regardless of any
+  // padding stored on the bank's w/h by older imports.
+  const fp = bank.footprint && bank.footprint.length >= 3 ? bank.footprint : null;
+  const fb = fp
+    ? fp.reduce(
+        (a, p) => ({ minX: Math.min(a.minX, p[0]), minY: Math.min(a.minY, p[1]), maxX: Math.max(a.maxX, p[0]), maxY: Math.max(a.maxY, p[1]) }),
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+      )
+    : null;
+  const cadW = fb ? Math.max(1, fb.maxX - fb.minX) : 0;
+  const cadH = fb ? Math.max(1, fb.maxY - fb.minY) : 0;
+  const style: React.CSSProperties = fb
+    ? { left: bank.x + fb.minX, top: bank.y + fb.minY, width: cadW, height: cadH }
+    : { left: bank.x, top: bank.y, width: bank.w ?? BANK_W, ...(bank.h ? { minHeight: bank.h } : {}) };
   return (
     <div
-      className={`bank${editMode ? " edit-mode" : ""}${highlighted ? " bank-highlight" : ""}${bank.footprint ? " bank-cad" : ""}`}
-      style={{ left: bank.x, top: bank.y, width: bank.w ?? BANK_W, ...(bank.h ? { minHeight: bank.h } : {}) }}
+      className={`bank${editMode ? " edit-mode" : ""}${highlighted ? " bank-highlight" : ""}${fb ? " bank-cad" : ""}`}
+      style={style}
     >
       <div className="bank-head">
         <div className="bank-name-row">
@@ -1022,7 +1038,7 @@ function BankView({
           )}
         </div>
       </div>
-      {editMode && bank.w != null && (
+      {editMode && bank.w != null && !fb && (
         <div className="bank-size-row mono">
           <span>{bank.w} × {bank.h}px</span>
           <button type="button" className="bank-size-reset" onClick={() => onResetSize(bank.id)}>↺ Reset size</button>
@@ -1042,14 +1058,13 @@ function BankView({
           />
         ))}
       </div>
-      {bank.footprint && (
-        // Exact CAD footprint, drawn over the card so true shape/position stays
-        // visible even when the card is larger than the footprint.
-        <svg className="bank-footprint" viewBox={`0 0 ${bank.w ?? BANK_W} ${bank.h ?? 0}`} style={{ width: bank.w ?? BANK_W, height: bank.h ?? 0 }}>
-          <polygon points={bank.footprint.map((p) => `${p[0]},${p[1]}`).join(" ")} />
+      {fp && fb && (
+        // Exact CAD footprint (the bank layer border), drawn as the card's border.
+        <svg className="bank-footprint" viewBox={`${fb.minX} ${fb.minY} ${cadW} ${cadH}`} style={{ width: cadW, height: cadH }}>
+          <polygon points={fp.map((p) => `${p[0]},${p[1]}`).join(" ")} />
         </svg>
       )}
-      {editMode && (
+      {editMode && !fb && (
         <div
           className="bank-resize-handle"
           title="Drag to resize this bank"
