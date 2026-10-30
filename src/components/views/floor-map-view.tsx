@@ -32,6 +32,10 @@ const LONG_PRESS_MS = 550;
 
 type ChangeLogEntry = { id: string; changeType: string; bankName: string; areaLabel: string; notes: string; ts: string };
 
+// Northfork plan is ~9600×13600; MIN_ZOOM must let it fit a ~900px-tall viewport.
+const MIN_ZOOM = 0.03;
+const MAX_ZOOM = 2.2;
+
 export function FloorMapView({
   areas: initialAreas,
   banks: initialBanks,
@@ -188,7 +192,7 @@ export function FloorMapView({
   }
 
   function setZoomAt(newZoom: number, clientX?: number, clientY?: number) {
-    const clamped = Math.max(0.4, Math.min(2.2, newZoom));
+    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
     const viewport = viewportRef.current;
     if (!viewport) { setZoom(clamped); return; }
     const rect = viewport.getBoundingClientRect();
@@ -300,7 +304,7 @@ export function FloorMapView({
     const viewport = viewportRef.current;
     if (!viewport) return;
     const rect = viewport.getBoundingClientRect();
-    const z = Math.max(0.4, Math.min(1, (rect.width - 40) / (plan.width + 80), (rect.height - 40) / (plan.height + 80)));
+    const z = Math.max(MIN_ZOOM, Math.min(1, (rect.width - 40) / (plan.width + 80), (rect.height - 40) / (plan.height + 80)));
     setZoom(z);
     setPanX(rect.width / 2 - (plan.originX + plan.width / 2) * z);
     setPanY(rect.height / 2 - (plan.originY + plan.height / 2) * z);
@@ -435,8 +439,8 @@ export function FloorMapView({
 
     function onWheel(e: WheelEvent) {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.08 : 0.08;
-      setZoomAt(zoomRef.current + delta, e.clientX, e.clientY);
+      const factor = e.deltaY > 0 ? 1 / 1.1 : 1.1;
+      setZoomAt(zoomRef.current * factor, e.clientX, e.clientY);
     }
     viewport.addEventListener("wheel", onWheel, { passive: false });
 
@@ -639,6 +643,7 @@ export function FloorMapView({
   };
 
   const zoomReset = () => { setZoom(0.85); setPanX(20); setPanY(10); };
+  const fitAll = () => fitToPlan({ originX: 0, originY: 0, width: mapWidth, height: mapHeight } as FloorPlanView);
 
   type SearchHit = { key: string; label: string; sub: string; bankId: string; machineSerial?: string };
   const searchIndex: SearchHit[] = useMemo(() => {
@@ -679,6 +684,7 @@ export function FloorMapView({
 
   const mapActions = [
     { icon: fullscreen ? "✕" : "⛶", label: fullscreen ? "Exit Full Screen" : "Full Screen", onClick: () => setFullscreen((v) => !v) },
+    { icon: "⤢", label: "Fit All", onClick: fitAll },
     { icon: "↺", label: "Reset View", onClick: zoomReset },
     { icon: "↔", label: "Expand Width", onClick: growWidth },
     { icon: "↕", label: "Expand Map", onClick: () => growZone(areaList[areaList.length - 1].key) },
@@ -767,9 +773,10 @@ export function FloorMapView({
             <button className="btn btn-small" onClick={growWidth}>↔ Expand Width</button>
             <button className="btn btn-small" onClick={() => growZone(areaList[areaList.length - 1].key)}>↕ Expand Map</button>
             <span className="toolbar-divider" />
-            <button className="btn btn-small" onClick={() => setZoomAt(zoom - 0.15)}>−</button>
+            <button className="btn btn-small" onClick={() => setZoomAt(zoom / 1.2)}>−</button>
             <span className="mono zoom-label">{Math.round(zoom * 100)}%</span>
-            <button className="btn btn-small" onClick={() => setZoomAt(zoom + 0.15)}>+</button>
+            <button className="btn btn-small" onClick={() => setZoomAt(zoom * 1.2)}>+</button>
+            <button className="btn btn-small" onClick={fitAll}>⤢ Fit All</button>
             <button className="btn btn-small" onClick={zoomReset}>Reset View</button>
             <button className="btn btn-small" onClick={() => setFullscreen((v) => !v)}>{fullscreen ? "✕ Exit Full Screen" : "⛶ Full Screen"}</button>
           </div>
@@ -862,9 +869,9 @@ export function FloorMapView({
         {variant === "mobile" && (
           <>
             <div className="m-fab-cluster">
-              <button className="m-fab" onClick={() => setZoomAt(zoom + 0.15)}>+</button>
+              <button className="m-fab" onClick={() => setZoomAt(zoom * 1.2)}>+</button>
               <div className="m-fab-zoom-label mono">{Math.round(zoom * 100)}%</div>
-              <button className="m-fab" onClick={() => setZoomAt(zoom - 0.15)}>−</button>
+              <button className="m-fab" onClick={() => setZoomAt(zoom / 1.2)}>−</button>
             </div>
             <button className={`m-fab-edit${editMode ? " active" : ""}`} onClick={toggleEditMode}>{editMode ? "✓" : "✎"}</button>
             {editMode && (
