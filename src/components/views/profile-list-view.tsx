@@ -87,11 +87,8 @@ export function ProfileListView({
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  // Holds the id being confirmed. Cleared whenever the drawer opens or closes
-  // so a record can never appear pre-armed when it is reopened.
-  const [confirmingArchive, setConfirmingArchive] = useState<string | null>(null);
   // Holds the id being edited. Cleared whenever the drawer opens or closes,
-  // same reasoning as confirmingArchive above.
+  // so a record can never appear pre-armed when it is reopened.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState("");
@@ -327,13 +324,11 @@ export function ProfileListView({
   };
 
   const openRecord = (id: string) => {
-    setConfirmingArchive(null);
     setEditingId(null);
     setSelected(id);
   };
 
   const closeRecord = () => {
-    setConfirmingArchive(null);
     setEditingId(null);
     setSelected(null);
   };
@@ -419,8 +414,7 @@ export function ProfileListView({
     startTransition(async () => {
       try {
         await archivePersonAction(selected!);
-        setConfirmingArchive(null);
-        setSelected(null);
+            setSelected(null);
         showToast("Profile archived");
         router.refresh();
       } catch {
@@ -875,20 +869,12 @@ export function ProfileListView({
                   <button className="btn btn-primary" disabled={pending} onClick={unarchive}>
                     Restore Profile
                   </button>
-                ) : confirmingArchive === selected ? (
-                  <>
-                    <div className="field-label">
-                      Archiving removes this profile from the active roster. This cannot be undone from the app.
-                    </div>
-                    <button className="btn btn-danger" disabled={pending} onClick={archive}>
-                      Confirm Archive
-                    </button>
-                    <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(null)}>
-                      Cancel
-                    </button>
-                  </>
                 ) : (
-                  <button className="btn" disabled={pending} onClick={() => setConfirmingArchive(selected)}>
+                  <button
+                    className="btn"
+                    disabled={pending}
+                    onClick={() => confirm({ title: "Archive this profile?", description: "Archiving removes this profile from the active roster. This cannot be undone from the app.", confirmLabel: "Archive", danger: true }, archive)}
+                  >
                     Archive Profile
                   </button>
                 )}
