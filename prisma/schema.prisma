@@ -149,6 +149,43 @@ model Machine {
   softwareStatus   String           @default("Compliant") // Compliant / Needs Update / Conditionally Revoked / Revoked
   statusSince      DateTime         @default(now())
 
+  // --- Source Data (agency slot export) ------------------------------------
+  // Optional so existing/demo machines stay valid; populated via Floor Setup
+  // Excel import or the machine record form.
+  holdPercent     Float? // Hold %, e.g. 8.5
+  videoReel       String? // "VIDEO" | "REEL"
+  meterDenom      String? // e.g. "0.01"
+  mixType         String?
+  freePlayEnabled Boolean?
+  bios            String?
+  ownerType       String? // "OWN" | "DAILY FEE" | "COIN IN"
+  machineClass    Int? // Excel "Class" — 2 or 3 (`class` is reserved in TS)
+
+  // --- VALIDATION tab: software / firmware IDs -----------------------------
+  typeId          String? // TypeID — plain string for now, not an entity
+  masterprom      String?
+  gameProm        String?
+  progSoftware    String? // "Prog. Software"
+  bvFirmware      String?
+  bvType          String?
+  printerFirmware String?
+  printer         String?
+
+  // --- VALIDATION tab: cabinet / config attributes -------------------------
+  cabinetType       String?
+  multiDenom        Boolean?
+  hasBv             Boolean?
+  hasCoin           Boolean?
+  hasVideoPoker     Boolean?
+  isActive          Boolean?
+  coinFillAmount    Float?
+  initialFillAmount Float?
+  gameType          String?
+  category          String?
+  subcategory       String?
+  cwa               String?
+  sectionZone       String? // Excel "Section/Zone" (distinct from app Area)
+
   bankId    String?
   bank      Bank?   @relation(fields: [bankId], references: [id])
   seatIndex Int?

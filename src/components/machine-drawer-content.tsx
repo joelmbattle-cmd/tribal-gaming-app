@@ -13,6 +13,7 @@ import {
   type MachineDrawerData,
 } from "@/lib/actions/machines";
 import { BankCombobox, NEW_BANK_VALUE } from "@/components/bank-combobox";
+import { SOURCE_FIELDS, formatSourceField, sourceFieldFormValue } from "@/lib/machine-source-fields";
 import type { ComplianceStatus } from "@/generated/prisma/enums";
 
 const STATUS_LABEL: Record<ComplianceStatus, string> = { VERIFIED: "Verified", FLAGGED: "Flagged", PENDING: "Pending" };
@@ -116,6 +117,7 @@ export function MachineDrawerContent({
           theme: String(form.get("theme") || ""),
           parSheet: String(form.get("par") || ""),
           sealNumber: String(form.get("seal") || ""),
+          source: Object.fromEntries(SOURCE_FIELDS.map((f) => [f.key, String(form.get(f.key) || "")])),
         });
         await updateMachineBankAction(serial, {
           bankId: !creatingBank && bankChoice ? bankChoice : undefined,
@@ -261,6 +263,9 @@ export function MachineDrawerContent({
               <div><div className="field-label">Game Theme</div><input className="field-input" name="theme" defaultValue={data.theme} /></div>
               <div><div className="field-label">PAR Sheet</div><input className="field-input" name="par" defaultValue={data.parSheet} /></div>
               <div><div className="field-label">Seal Number</div><input className="field-input" name="seal" defaultValue={data.sealNumber} placeholder="e.g. SL-77291" /></div>
+              {SOURCE_FIELDS.map((f) => (
+                <div key={f.key}><div className="field-label">{f.label}</div><input className="field-input" name={f.key} defaultValue={sourceFieldFormValue(f.key, data.source[f.key])} placeholder={f.placeholder} /></div>
+              ))}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button type="submit" className="btn btn-primary" disabled={pending}>Save Changes</button>
@@ -275,6 +280,9 @@ export function MachineDrawerContent({
             <div><div className="field-label">Game Theme</div><div className="field-value">{data.theme}</div></div>
             <div><div className="field-label">PAR Sheet</div><div className="field-value">{data.parSheet}</div></div>
             <div><div className="field-label">Seal Number</div><div className="field-value">{data.sealNumber || "— not sealed —"}</div></div>
+            {SOURCE_FIELDS.map((f) => (
+              <div key={f.key}><div className="field-label">{f.label}</div><div className="field-value">{formatSourceField(f.key, data.source[f.key]) || "—"}</div></div>
+            ))}
             <div><div className="field-label">Lifecycle Status</div><div className="field-value">{LIFECYCLE_LABEL[data.lifecycleStatus]}</div></div>
             <div><div className="field-label">Highlight / Flag</div><div className="field-value">{HIGHLIGHT_LABEL[data.highlightFlag]}</div></div>
           </div>

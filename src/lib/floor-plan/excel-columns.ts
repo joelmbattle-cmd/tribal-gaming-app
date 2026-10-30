@@ -3,6 +3,8 @@
 // mapping (auto-guessed here) and rows are rewritten to the canonical keys the
 // import action already understands.
 
+import { SOURCE_FIELDS } from "@/lib/machine-source-fields";
+
 export const IMPORT_FIELDS = [
   { key: "Serial Number", required: true, aliases: ["serial number", "serial", "serial no", "serial #", "serial#", "serialnumber", "sn", "egm serial", "machine serial"] },
   { key: "Bank", required: true, aliases: ["bank", "bank id", "bank name", "bank number", "bank no", "bank #", "bank code", "location"] },
@@ -18,6 +20,8 @@ export const IMPORT_FIELDS = [
   { key: "Status Since", required: false, aliases: ["status since", "since", "status date"] },
   { key: "Lifecycle Status", required: false, aliases: ["lifecycle status", "lifecycle", "life cycle", "asset status", "machine status"] },
   { key: "Area", required: false, aliases: ["area", "zone", "floor area"] },
+  // Source Data columns (Hold %, Video/Reel, Meter Denom, Mix Type, Free Play, Bios, Owner Type, Class)
+  ...SOURCE_FIELDS.map((f) => ({ key: f.importKey, required: false, aliases: f.aliases })),
 ] as const;
 
 export type ImportFieldKey = (typeof IMPORT_FIELDS)[number]["key"];

@@ -1,5 +1,6 @@
 "use server";
 
+import { SOURCE_FIELDS, parseSourceFields, pickSourceFields, type SourceFieldsInput } from "@/lib/machine-source-fields";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
@@ -26,6 +27,7 @@ export type NewMachineFields = {
   theme: string;
   parSheet: string;
   sealNumber?: string;
+  source?: SourceFieldsInput;
 } & BankTarget;
 
 // New machines land on a shared "Unassigned" bank so they're visible on the
@@ -88,6 +90,7 @@ export async function createMachineAction(fields: NewMachineFields) {
       theme,
       parSheet,
       sealNumber,
+      ...parseSourceFields(fields.source ?? {}, { skipBlank: true }),
       bankId: bank.id,
       seatIndex,
       history: { create: [{ event: `Added via Machine Records — placed in ${bank.name}, Seat ${seatIndex + 1}` }] },
@@ -131,6 +134,7 @@ export async function getMachineDrawerDataAction(serial: string) {
     theme: m.theme,
     parSheet: m.parSheet,
     sealNumber: m.sealNumber,
+    source: pickSourceFields(m),
     complianceStatus: m.complianceStatus,
     lifecycleStatus: m.lifecycleStatus,
     highlightFlag: m.highlightFlag,
@@ -190,14 +194,14 @@ export async function setMachineComplianceStatusAction(serial: string, status: C
 
 export async function updateMachineFieldsAction(
   serial: string,
-  fields: { manufacturer: string; model: string; theme: string; parSheet: string; sealNumber: string },
+  fields: { manufacturer: string; model: string; theme: string; parSheet: string; sealNumber: string; source?: SourceFieldsInput },
 ) {
   await requireRole("COMPLIANCE");
   const machine = await db.machine.findUnique({ where: { serial } });
   if (!machine) throw new Error("Machine not found");
 
   const changed: string[] = [];
-  const data: Record<string, string> = {};
+  const data: Record<string, unknown> = {};
   if (fields.manufacturer.trim() && fields.manufacturer !== machine.manufacturer) {
     data.manufacturer = fields.manufacturer.trim();
     changed.push("Manufacturer");
@@ -217,6 +221,13 @@ export async function updateMachineFieldsAction(
   if (fields.sealNumber !== machine.sealNumber) {
     data.sealNumber = fields.sealNumber;
     changed.push("Seal Number");
+  }
+  const source = parseSourceFields(fields.source ?? {});
+  for (const f of SOURCE_FIELDS) {
+    if (f.key in source && source[f.key] !== machine[f.key]) {
+      data[f.key] = source[f.key];
+      changed.push(f.label);
+    }
   }
 
   if (changed.length === 0) return;
