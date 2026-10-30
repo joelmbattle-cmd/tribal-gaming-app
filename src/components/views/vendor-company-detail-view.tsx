@@ -290,12 +290,12 @@ export function VendorCompanyDetailView({
       ) : (
         <div className="profiles" style={{ marginBottom: 24 }}>
           {pendingApplications.map((a) => (
-            <div key={a.id} className="profile-row" style={{ cursor: "default" }}>
+            <div key={a.id} className="profile-row vendor-pending-row" style={{ cursor: "default" }}>
               <div className="avatar">{a.name.split(" ").map((w) => w[0]).join("")}</div>
               <div><div className="p-name">{a.name}</div><div className="p-id">{a.role}</div></div>
               <div className="p-id">Invited {a.invitedAt}</div>
               <div><span className={`chip ${PROGRESS_CHIP[a.progress] ?? "chip-neutral"}`}>{a.progress}</span></div>
-              <div style={{ display: "flex", gap: 6 }}>
+              <div className="vendor-pending-actions">
                 {a.progress === "Invited" && (
                   <button className="btn btn-small" disabled={pending} onClick={() => confirm({ title: "Mark as submitted?", description: `Record ${a.name}'s principal application as submitted.`, confirmLabel: "Mark Submitted" }, () => markSubmitted(a.id))}>Mark Submitted</button>
                 )}

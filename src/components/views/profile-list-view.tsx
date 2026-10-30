@@ -5,6 +5,7 @@ import { useState, useTransition, useRef } from "react";
 import { ProfileDrawerTabs, type ProfileDrawerTab } from "@/components/profile-drawer-tabs";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ResponsiveOverlay } from "@/components/overlay";
+import { ActionSheet } from "@/components/action-sheet";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { preparePhoto } from "@/lib/image-client";
@@ -122,6 +123,7 @@ export function ProfileListView({
   // adjuster, before it's cropped and handed to the upload action.
   const [adjustingPhoto, setAdjustingPhoto] = useState<File | null>(null);
   const [showFanout, setShowFanout] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [showNigcPacket, setShowNigcPacket] = useState(false);
   // "ALL", "CRITICAL_PIPELINE", "COMPLIANCE", and "LICENSING_ACTIONS" are
   // folder tabs alongside the status values — the latter three are computed
@@ -460,11 +462,12 @@ export function ProfileListView({
           <div className="view-title">{showArchived ? `Archived ${title ?? "Person Profiles"}` : (title ?? "Person Profiles")}</div>
           <div className="view-sub">{subtitle ?? "Click a profile to review documents and background investigation status."}</div>
         </div>
+        {variant === "desktop" ? (
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={toggleShowArchived}>
             {showArchived ? "Show Active" : "Show Archived"}
           </button>
-          {variant === "desktop" && !showArchived && (
+          {!showArchived && (
             <>
               <button className="btn" onClick={() => setShowFanout(true)}>Send No-Objection Letter</button>
               <button className="btn" onClick={() => setShowNigcPacket(true)}>Generate NIGC Packet</button>
@@ -472,7 +475,28 @@ export function ProfileListView({
             </>
           )}
         </div>
+        ) : (
+          <button className="m-icon-btn" onClick={() => setActionsOpen(true)} aria-label="Profile actions">⋯</button>
+        )}
       </div>
+
+      {variant !== "desktop" && (
+        <ActionSheet
+          open={actionsOpen}
+          onClose={() => setActionsOpen(false)}
+          title="Profiles"
+          actions={[
+            ...(showArchived
+              ? []
+              : [
+                  { icon: "+", label: "New Profile", onClick: () => setShowCreateForm(true) },
+                  { icon: "✉", label: "Send No-Objection Letter", onClick: () => setShowFanout(true) },
+                  { icon: "▤", label: "Generate NIGC Packet", onClick: () => setShowNigcPacket(true) },
+                ]),
+            { icon: "◫", label: showArchived ? "Show Active" : "Show Archived", onClick: toggleShowArchived },
+          ]}
+        />
+      )}
 
       <div className="folder-tabs">
         <button className={`folder-tab${activeFolder === "ALL" ? " folder-tab-active" : ""}`} onClick={() => setActiveFolder("ALL")}>

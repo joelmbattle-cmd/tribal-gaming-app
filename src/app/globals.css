@@ -890,3 +890,41 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 82px); }
 .drawer-tabs::-webkit-scrollbar { display: none; }
 .m-sheet .drawer-tabs { padding: 0 0 10px; }
 .drawer-tab { flex-shrink: 0; cursor: pointer; }
+
+/* ---------- Mobile licensing P1: drawer chrome, tap targets, monitor cards, vendor actions ---------- */
+.monitor-actions { text-align: right; white-space: nowrap; }
+.vendor-pending-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+@media (max-width: 860px) {
+  /* License Monitor: table rows become stacked cards — no horizontal scroll. */
+  .monitor-table, .monitor-table tbody, .monitor-table tr, .monitor-table td { display: block; width: 100%; }
+  .monitor-table thead { display: none; }
+  .monitor-table tr { border: 1px solid var(--hairline-strong); border-radius: 10px; background: var(--panel-light); padding: 10px 12px; margin-bottom: 10px; }
+  .monitor-table td { border: none; padding: 3px 0; }
+  .monitor-table td[data-label]::before { content: attr(data-label) ": "; color: var(--parchment-dim); font-size: 11px; margin-right: 4px; }
+  .monitor-table td.monitor-actions { text-align: left; white-space: normal; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+  /* Vendor pending applications: 5 children — actions get their own full row. */
+  .vendor-pending-row .vendor-pending-actions { grid-column: 1 / -1; padding-top: 4px; }
+  .vendor-pending-row .vendor-pending-actions .btn-danger { margin-left: auto; }
+}
+
+@media (max-width: 480px) {
+  /* Compress the sticky drawer stack (head + case card + tabs) inside the sheet. */
+  .m-sheet .drawer-sticky { top: -10px; padding-top: 6px; margin-top: -10px; }
+  .m-sheet .drawer-head, .m-sheet .drawer-sticky .drawer-head { padding: 2px 2px 6px; }
+  .m-sheet .case-card { margin: 0 0 6px; padding: 6px 8px; gap: 8px; }
+  .m-sheet .case-card-photo { width: 32px; height: 32px; }
+  .m-sheet .case-card-meta { gap: 3px; }
+  .m-sheet .case-card-sub, .m-sheet .case-card-stamp { display: none; }
+  .m-sheet .drawer-tabs { padding: 0 0 6px; gap: 4px; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .btn-small, .folder-tab, .drawer-tab, .metrics-month-btn, .monitor-filters .btn, .monitor-csv,
+  .monitor-actions .btn, .vendor-pending-actions .btn {
+    min-height: 44px; touch-action: manipulation;
+  }
+  .btn-small, .monitor-actions .btn { display: inline-flex; align-items: center; justify-content: center; }
+  .metrics-month-btn { min-width: 44px; }
+  .m-icon-btn { min-width: 44px; min-height: 44px; touch-action: manipulation; }
+}

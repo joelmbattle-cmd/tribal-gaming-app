@@ -81,11 +81,11 @@ export function LicensingMetricsView({ people }: { people: LicensingMetricsPerso
 
       {mode === "month" ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 22 }}>
-          <button className="btn btn-small" onClick={() => setMonthValue((v) => shiftMonth(v, -1))} aria-label="Previous month">
+          <button className="btn btn-small metrics-month-btn" onClick={() => setMonthValue((v) => shiftMonth(v, -1))} aria-label="Previous month">
             ◀
           </button>
           <div style={{ minWidth: 160, textAlign: "center", fontWeight: 600 }}>{formatMonthLabel(monthValue)}</div>
-          <button className="btn btn-small" onClick={() => setMonthValue((v) => shiftMonth(v, 1))} aria-label="Next month">
+          <button className="btn btn-small metrics-month-btn" onClick={() => setMonthValue((v) => shiftMonth(v, 1))} aria-label="Next month">
             ▶
           </button>
         </div>

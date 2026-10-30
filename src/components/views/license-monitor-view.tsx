@@ -190,12 +190,12 @@ export function LicenseMonitorView({ people, companies }: { people: MonitorPerso
           <div className="view-title">License Monitor</div>
           <div className="view-sub">Licensees, vendor principals and vendor companies with a license expired or due within {MONITOR_WINDOW_DAYS} days.</div>
         </div>
-        <button className="btn btn-small" disabled={filteredRows.length === 0} onClick={() => exportCsv(filteredRows, filter)}>
+        <button className="btn btn-small monitor-csv" disabled={filteredRows.length === 0} onClick={() => exportCsv(filteredRows, filter)}>
           Export CSV
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }} role="tablist" aria-label="Filter by expiry band">
+      <div className="monitor-filters" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }} role="tablist" aria-label="Filter by expiry band">
         {chips.map((c) => (
           <button
             key={c.key}
@@ -221,8 +221,8 @@ export function LicenseMonitorView({ people, companies }: { people: MonitorPerso
                 None in this band.{filter !== "all" && " Try “All” to see every band."}
               </div>
             ) : (
-              <div style={{ overflowX: "auto", marginBottom: 24 }}>
-                <table className="setup-table" style={{ width: "100%" }}>
+              <div className="monitor-table-wrap" style={{ marginBottom: 24 }}>
+                <table className="setup-table monitor-table" style={{ width: "100%" }}>
                   <thead>
                     <tr>
                       <th style={{ textAlign: "left" }}>Licensee / Company</th>
@@ -239,10 +239,10 @@ export function LicenseMonitorView({ people, companies }: { people: MonitorPerso
                           <div className="p-name">{r.name}</div>
                           <div className="p-id">{r.detail}</div>
                         </td>
-                        <td>{r.type}</td>
-                        <td>{r.expires}</td>
-                        <td><span className={`chip ${BUCKET_CHIP[r.bucket]}`}>{daysLabel(r.days)}</span></td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <td data-label="Type">{r.type}</td>
+                        <td data-label="Expires">{r.expires}</td>
+                        <td data-label="Days"><span className={`chip ${BUCKET_CHIP[r.bucket]}`}>{daysLabel(r.days)}</span></td>
+                        <td className="monitor-actions">
                           <Link className="btn btn-small" href={r.href}>Open profile</Link>{" "}
                           <button
                             className="btn btn-small"
