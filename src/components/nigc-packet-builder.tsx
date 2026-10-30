@@ -7,6 +7,7 @@ import type { DocumentSlot } from "@/lib/document-slots";
 import { licensingStatusLabel, type LicensingApplicationStatus } from "@/lib/licensing-status";
 import { buildNigcPacket, type NigcPacketEntry, type PacketFormType } from "@/lib/licensing-forms";
 import { openHtmlPreview } from "@/lib/print-preview";
+import { getPacketSsnsAction } from "@/lib/actions/people";
 
 type Candidate = {
   id: string;
@@ -14,7 +15,6 @@ type Candidate = {
   archived: boolean;
   documents: { slot: DocumentSlot | null }[];
   position?: string | null;
-  ssn?: string | null;
   dateOfBirth?: string | null;
   licenseType?: string | null;
   licenseNumber?: string | null;
@@ -88,19 +88,26 @@ export function NigcPacketBuilder({
     onClose();
   };
 
-  const generate = () => {
+  const generate = async () => {
     if (selectedRows.length === 0) {
       showToast("Select at least one eligible profile first");
       return;
     }
 
+    let ssns: Record<string, string | null>;
+    try {
+      ssns = await getPacketSsnsAction(selectedRows.map((r) => r.person.id));
+    } catch {
+      showToast("Failed to load packet data");
+      return;
+    }
     const entries: NigcPacketEntry[] = [];
     for (const { person, hasNotice, hasIssuance } of selectedRows) {
       const formPerson = {
         id: person.id,
         name: person.name,
         position: person.position ?? null,
-        ssn: person.ssn ?? null,
+        ssn: ssns[person.id] ?? null,
         dateOfBirth: person.dateOfBirth ?? null,
         licenseType: person.licenseType ?? null,
         licenseNumber: person.licenseNumber ?? null,

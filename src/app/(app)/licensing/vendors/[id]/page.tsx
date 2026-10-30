@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ssnLast4 } from "@/lib/ssn";
 import { getVendorCompany } from "@/lib/data/vendor-companies";
 import { VendorCompanyDetailView } from "@/components/views/vendor-company-detail-view";
 
@@ -47,7 +48,7 @@ export default async function VendorCompanyPage({
           photoUrl: p.photoUrl,
           dateOfBirth: p.dateOfBirth ? p.dateOfBirth.toISOString().slice(0, 10) : null,
           contactInfo: p.contactInfo,
-          ssn: p.ssn,
+          ssnLast4: ssnLast4(p.ssn),
           position: p.position,
           jobDescription: p.jobDescription,
           licenseType: p.licenseType,
