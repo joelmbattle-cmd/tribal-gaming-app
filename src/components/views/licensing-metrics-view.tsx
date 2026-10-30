@@ -65,7 +65,7 @@ export function LicensingMetricsView({ people }: { people: LicensingMetricsPerso
       <div className="view-title">Licensing Metrics &amp; Reporting</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div className="view-sub">Licensing-only metrics for the selected period. No Compliance data is shown on this page.</div>
-        <button className="btn btn-primary" onClick={exportCsv}>
+        <button className="btn btn-primary metrics-export-csv" onClick={exportCsv}>
           Export CSV
         </button>
       </div>

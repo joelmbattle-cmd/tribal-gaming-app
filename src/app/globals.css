@@ -921,9 +921,10 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 82px); }
 
 @media (hover: none) and (pointer: coarse) {
   .btn-small, .folder-tab, .drawer-tab, .metrics-month-btn, .monitor-filters .btn, .monitor-csv,
-  .monitor-actions .btn, .vendor-pending-actions .btn {
+  .monitor-actions .btn, .vendor-pending-actions .btn, .metrics-export-csv {
     min-height: 44px; touch-action: manipulation;
   }
+  .metrics-export-csv { width: 100%; display: inline-flex; align-items: center; justify-content: center; }
   .btn-small, .monitor-actions .btn { display: inline-flex; align-items: center; justify-content: center; }
   .metrics-month-btn { min-width: 44px; }
   .m-icon-btn { min-width: 44px; min-height: 44px; touch-action: manipulation; }
