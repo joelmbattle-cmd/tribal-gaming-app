@@ -15,7 +15,7 @@ import {
   PLAN_PAD,
   validatePlanPayload,
 } from "@/lib/floor-plan/types";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 
 type InputJsonValue = Prisma.InputJsonValue;
 
@@ -111,14 +111,16 @@ export async function applyFloorPlanAction(input: unknown): Promise<ApplyPlanRes
             w: b.w,
             h: b.h,
             footprint: b.footprint as unknown as InputJsonValue,
+            seatSpots: b.seats?.length ? (b.seats as unknown as InputJsonValue) : Prisma.DbNull,
           };
           const hit = byRef.get(b.ref);
           if (hit) {
-            await tx.bank.update({ where: { id: hit.id }, data: geo });
+            // Capacity grows to the drawn seat count; never shrinks under seated machines.
+            await tx.bank.update({ where: { id: hit.id }, data: { ...geo, capacity: Math.max(hit.capacity, b.seats?.length ?? 0) } });
             updated++;
           } else {
             await tx.bank.create({
-              data: { ...geo, name: uniqueName(b.label), areaId, capacity: 1, planId, cadRef: b.ref },
+              data: { ...geo, name: uniqueName(b.label), areaId, capacity: Math.max(1, b.seats?.length ?? 0), planId, cadRef: b.ref },
             });
             created++;
           }
@@ -159,10 +161,11 @@ export async function applyFloorPlanAction(input: unknown): Promise<ApplyPlanRes
             areaId,
             x: PLAN_ORIGIN_X + b.x,
             y: areaY + PLAN_PAD + b.y,
-            capacity: 1,
+            capacity: Math.max(1, b.seats?.length ?? 0),
             w: b.w,
             h: b.h,
             footprint: b.footprint as unknown as InputJsonValue,
+            seatSpots: b.seats?.length ? (b.seats as unknown as InputJsonValue) : Prisma.DbNull,
             planId,
             cadRef: b.ref,
           })),

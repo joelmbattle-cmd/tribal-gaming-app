@@ -102,6 +102,9 @@ model Bank {
   h         Int?
   // Exact CAD footprint polygon, [[x, y], ...] relative to the card's top-left.
   footprint Json?
+  // CAD seat positions [[cx, cy, size] | null, ...] relative to the card's
+  // top-left, indexed by Machine.seatIndex (DXF stand number - 1).
+  seatSpots Json?
   planId    String?
   plan      FloorPlan? @relation(fields: [planId], references: [id])
   // Stable id within the plan (DXF handle or label) so re-importing an edited

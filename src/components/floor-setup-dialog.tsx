@@ -114,6 +114,7 @@ function CadStep({
   const [error, setError] = useState<string | null>(null);
   const [outlineLayers, setOutlineLayers] = useState<string[]>([]);
   const [bankLayers, setBankLayers] = useState<string[]>([]);
+  const [seatLayers, setSeatLayers] = useState<string[]>([]);
   const [planName, setPlanName] = useState("");
   const [width, setWidth] = useState(DEFAULT_PLAN_WIDTH);
   const [targetPlanId, setTargetPlanId] = useState("");
@@ -149,6 +150,7 @@ function CadStep({
       setPlanName(file.name.replace(/\.dxf$/i, "").replace(/[_-]+/g, " ").trim() || "Imported floor");
       setOutlineLayers(guess.outlineLayers);
       setBankLayers(guess.bankLayers);
+      setSeatLayers(guess.seatLayers);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read that DXF.");
     } finally {
@@ -160,13 +162,13 @@ function CadStep({
     if (!scene) return null;
     if (!bankLayers.length) return { ok: false, error: "Pick the layer(s) that hold the bank footprints." } as const;
     try {
-      const extracted = extractPlan(scene, { outlineLayers, bankLayers });
+      const extracted = extractPlan(scene, { outlineLayers, bankLayers, seatLayers });
       const laid = layoutPlan(extracted, width);
       return { ok: true, extracted, laid } as const;
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : "Could not build a floor from those layers." } as const;
     }
-  }, [scene, outlineLayers, bankLayers, width]);
+  }, [scene, outlineLayers, bankLayers, seatLayers, width]);
 
   const ready = result?.ok ? result : null;
   const warnings = [...(scene?.warnings ?? []), ...(ready ? [...ready.extracted.warnings, ...ready.laid.warnings] : [])];
@@ -230,6 +232,15 @@ function CadStep({
               <legend>Bank footprint layer(s)</legend>
               <LayerList layers={scene.layers} selected={bankLayers} onToggle={(n) => toggle(bankLayers, setBankLayers, n)} />
               <div className="setup-note">One closed shape per bank. Text inside a shape becomes its name.</div>
+            </fieldset>
+            <fieldset className="setup-fieldset">
+              <legend>Seat / machine position layer(s)</legend>
+              <LayerList layers={scene.layers} selected={seatLayers} onToggle={(n) => toggle(seatLayers, setSeatLayers, n)} />
+              <div className="setup-note">
+                Optional. One small shape per machine inside each bank, numbered with its stand (01, 02 …). Machines from the
+                slot list (Bank + Stand) are drawn on these exact spots.
+                {ready && ` ${ready.extracted.banks.reduce((n, b) => n + b.seats.length, 0)} seat(s) found.`}
+              </div>
             </fieldset>
           </div>
 

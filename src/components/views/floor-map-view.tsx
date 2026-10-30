@@ -985,6 +985,7 @@ function BankView({
         { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
       )
     : null;
+  const spots = fb ? bank.seatSpots : null;
   const cadW = fb ? Math.max(1, fb.maxX - fb.minX) : 0;
   const cadH = fb ? Math.max(1, fb.maxY - fb.minY) : 0;
   const style: React.CSSProperties = fb
@@ -1044,8 +1045,31 @@ function BankView({
           <button type="button" className="bank-size-reset" onClick={() => onResetSize(bank.id)}>↺ Reset size</button>
         </div>
       )}
+      {spots && fb && (
+        // CAD seats: each machine sits on its drawn seat (index = stand - 1).
+        <div className="bank-seat-layer" style={{ width: cadW, height: cadH }}>
+          {bank.seats.map((seat, i) => {
+            const sp = spots[i];
+            if (!sp) return null;
+            const size = Math.max(6, sp[2]);
+            return (
+              <SlotView
+                key={i}
+                cad={{ left: sp[0] - fb.minX - size / 2, top: sp[1] - fb.minY - size / 2, size }}
+                seat={seat}
+                selected={!!tapSource && tapSource.bankId === bank.id && tapSource.seat === i}
+                editMode={editMode}
+                highlighted={!!seat && seat.serial === highlightSerial}
+                onClick={() => onSlotClick(i, !!seat)}
+                onDragStart={() => onDragStart(i)}
+                onDrop={() => onDrop(i)}
+              />
+            );
+          })}
+        </div>
+      )}
       <div className="machines-row">
-        {bank.seats.map((seat, i) => (
+        {bank.seats.map((seat, i) => spots && fb && spots[i] ? null : (
           <SlotView
             key={i}
             seat={seat}
@@ -1077,6 +1101,7 @@ function BankView({
 }
 
 function SlotView({
+  cad,
   seat,
   selected,
   editMode,
@@ -1085,6 +1110,8 @@ function SlotView({
   onDragStart,
   onDrop,
 }: {
+  /** Absolute CAD seat box (px, relative to the card); omitted = flow layout. */
+  cad?: { left: number; top: number; size: number };
   seat: FloorSeat;
   selected: boolean;
   editMode: boolean;
@@ -1094,10 +1121,16 @@ function SlotView({
   onDrop: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const cadStyle: React.CSSProperties | undefined = cad
+    ? { left: cad.left, top: cad.top, width: cad.size, height: cad.size, fontSize: Math.max(3, Math.min(9.5, cad.size / 5)) }
+    : undefined;
+  const cadCls = cad ? " seat-cad" : "";
   if (seat) {
     return (
       <div
-        className={`machine${editMode ? " draggable-tile" : ""}${selected ? " slot-selected" : ""}${dragOver ? " slot-dragover" : ""}${highlighted ? " machine-highlight" : ""}`}
+        style={cadStyle}
+        title={cad ? seat.serial : undefined}
+        className={`machine${cadCls}${editMode ? " draggable-tile" : ""}${selected ? " slot-selected" : ""}${dragOver ? " slot-dragover" : ""}${highlighted ? " machine-highlight" : ""}`}
         draggable={editMode}
         onDragStart={editMode ? onDragStart : undefined}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -1112,13 +1145,14 @@ function SlotView({
   }
   return (
     <div
-      className={`empty-slot${selected ? " slot-selected" : ""}${dragOver ? " slot-dragover" : ""}`}
+      style={cadStyle}
+      className={`empty-slot${cadCls}${selected ? " slot-selected" : ""}${dragOver ? " slot-dragover" : ""}`}
       onClick={editMode ? onClick : undefined}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(); }}
     >
-      {editMode ? (selected ? "tap dest" : "tap / drop") : ""}
+      {editMode && !cad ? (selected ? "tap dest" : "tap / drop") : ""}
     </div>
   );
 }

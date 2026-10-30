@@ -763,6 +763,12 @@ body.map-fullscreen .m-fab-add { bottom: calc(var(--safe-b) + 82px); }
    content scales down / clips inside it rather than growing the card. */
 .bank-cad { background: rgba(26, 34, 43, 0.94); border-color: transparent; padding: 4px 6px; overflow: hidden; box-shadow: none; }
 .bank-cad .bank-head { margin-bottom: 4px; gap: 4px; }
+/* CAD seats: machines sit on their drawn seat spots, above the card header. */
+.bank-seat-layer { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; }
+.bank-seat-layer .seat-cad { position: absolute; pointer-events: auto; border-radius: 2px; padding: 0; overflow: hidden; line-height: 1; }
+.bank-seat-layer .seat-cad .m-id { font-size: inherit; white-space: nowrap; }
+.bank-seat-layer .seat-cad .m-status { width: 30%; height: 30%; bottom: 8%; max-width: 6px; max-height: 6px; }
+.bank-seat-layer .machine.seat-cad:hover { transform: none; }
 .bank-size-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px 0 10px; font-size: 10px; color: var(--parchment-dim); }
 .bank-size-reset { background: none; border: 1px solid var(--hairline-strong); color: var(--parchment-dim); border-radius: 4px; font-size: 10px; padding: 3px 8px; min-height: 26px; cursor: pointer; }
 .bank-size-reset:hover { border-color: var(--seal); color: var(--seal); }
