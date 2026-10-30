@@ -32,8 +32,9 @@ const LONG_PRESS_MS = 550;
 
 type ChangeLogEntry = { id: string; changeType: string; bankName: string; areaLabel: string; notes: string; ts: string };
 
-// Northfork plan is ~9600×13600; MIN_ZOOM must let it fit a ~900px-tall viewport.
-const MIN_ZOOM = 0.03;
+// Northfork plan is ~9600×13600. Wheel/pinch zoom floor; Fit All may go lower
+// still so the whole floor always fits, even on a phone-sized viewport.
+const MIN_ZOOM = 0.005;
 const MAX_ZOOM = 2.2;
 
 export function FloorMapView({
@@ -304,7 +305,7 @@ export function FloorMapView({
     const viewport = viewportRef.current;
     if (!viewport) return;
     const rect = viewport.getBoundingClientRect();
-    const z = Math.max(MIN_ZOOM, Math.min(1, (rect.width - 40) / (plan.width + 80), (rect.height - 40) / (plan.height + 80)));
+    const z = Math.max(0.001, Math.min(1, (rect.width - 40) / (plan.width + 80), (rect.height - 40) / (plan.height + 80)));
     setZoom(z);
     setPanX(rect.width / 2 - (plan.originX + plan.width / 2) * z);
     setPanY(rect.height / 2 - (plan.originY + plan.height / 2) * z);
@@ -643,7 +644,20 @@ export function FloorMapView({
   };
 
   const zoomReset = () => { setZoom(0.85); setPanX(20); setPanY(10); };
-  const fitAll = () => fitToPlan({ originX: 0, originY: 0, width: mapWidth, height: mapHeight } as FloorPlanView);
+  // Fit the true content bounds: areas, imported CAD plans and banks, so nothing
+  // drawn outside the area bands (or below mapHeight) is left off-screen.
+  const fitAll = () => {
+    let minX = 0, minY = 0, maxX = mapWidth, maxY = mapHeight;
+    for (const pl of plans) {
+      minX = Math.min(minX, pl.originX); minY = Math.min(minY, pl.originY);
+      maxX = Math.max(maxX, pl.originX + pl.width); maxY = Math.max(maxY, pl.originY + pl.height);
+    }
+    for (const b of banks) {
+      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + (b.w ?? 200)); maxY = Math.max(maxY, b.y + (b.h ?? 200));
+    }
+    fitToPlan({ originX: minX, originY: minY, width: maxX - minX, height: maxY - minY } as FloorPlanView);
+  };
 
   type SearchHit = { key: string; label: string; sub: string; bankId: string; machineSerial?: string };
   const searchIndex: SearchHit[] = useMemo(() => {
