@@ -489,3 +489,17 @@ export async function getPacketSsnsAction(personIds: string[]): Promise<Record<s
   revalidatePath("/licensing/profiles");
   return Object.fromEntries(people.map((p) => [p.id, p.ssn ?? null]));
 }
+
+/** License Monitor: record that a renewal reminder was sent (durable PersonHistory audit). */
+export async function sendPersonRenewalReminderAction(personId: string) {
+  const user = await requireRole("LICENSING");
+  await db.person.update({
+    where: { id: personId },
+    data: {
+      lastModifiedBy: user.name,
+      history: { create: { event: `Renewal reminder sent by ${user.name}` } },
+    },
+  });
+  revalidatePath("/licensing/monitor");
+  revalidatePath("/licensing/profiles");
+}
