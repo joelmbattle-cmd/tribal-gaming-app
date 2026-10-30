@@ -20,7 +20,10 @@ import {
   setBankAreaAction,
   shrinkZoneHeightAction,
 } from "@/lib/actions/floor";
-import type { FloorArea, FloorBank, FloorSeat } from "@/lib/data/floor";
+import { FloorSetupDialog } from "@/components/floor-setup-dialog";
+import { resizeBankAction } from "@/lib/actions/floor-plan";
+import { MANUAL_MIN_H, MANUAL_MIN_W, MAX_BANK_H, MAX_BANK_W } from "@/lib/floor-plan/types";
+import type { BankOption, FloorArea, FloorBank, FloorPlanView, FloorSeat } from "@/lib/data/floor";
 
 const BANK_W = 292;
 const AREA_DOT: Record<string, string> = { main: "dot-main", highlimit: "dot-highlimit", other: "dot-other" };
@@ -32,11 +35,15 @@ type ChangeLogEntry = { id: string; changeType: string; bankName: string; areaLa
 export function FloorMapView({
   areas: initialAreas,
   banks: initialBanks,
+  plans,
+  bankOptions,
   mapWidth: initialMapWidth,
   changeLog,
 }: {
   areas: FloorArea[];
   banks: FloorBank[];
+  plans: FloorPlanView[];
+  bankOptions: BankOption[];
   mapWidth: number;
   mapHeight: number;
   changeLog: ChangeLogEntry[];
@@ -78,6 +85,7 @@ export function FloorMapView({
   const [mapSearchOpen, setMapSearchOpen] = useState(false);
   const [highlightBankId, setHighlightBankId] = useState<string | null>(null);
   const [highlightSerial, setHighlightSerial] = useState<string | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
@@ -94,6 +102,11 @@ export function FloorMapView({
   useEffect(() => { areaListRef.current = areaList; }, [areaList]);
 
   const bankDragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
+  // Manual per-bank resize (edit mode). w/h track the latest size so the commit
+  // on release reads the ref rather than side-effecting inside a state updater.
+  const bankResizeRef = useRef<{ id: string; startX: number; startY: number; origW: number; origH: number; w: number; h: number } | null>(null);
+  // Set by the Floor Setup dialog after an import; consumed once the refreshed plans arrive.
+  const pendingFocusRef = useRef<string | null>(null);
   const panDragRef = useRef<{ startX: number; startY: number; origPanX: number; origPanY: number } | null>(null);
   const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
   const dragSourceRef = useRef<{ bankId: string; seat: number } | null>(null);
@@ -191,6 +204,10 @@ export function FloorMapView({
   // ---- Document-level mouse handlers (bank drag + pan) ----
   useEffect(() => {
     function onMove(e: MouseEvent) {
+      if (bankResizeRef.current) {
+        resizeTo(e.clientX, e.clientY);
+        return;
+      }
       if (bankDragRef.current) {
         const d = bankDragRef.current;
         const dx = (e.clientX - d.startX) / zoomRef.current;
@@ -208,6 +225,10 @@ export function FloorMapView({
       }
     }
     async function onUp() {
+      if (bankResizeRef.current) {
+        commitResize();
+        return;
+      }
       if (bankDragRef.current) {
         const d = bankDragRef.current;
         bankDragRef.current = null;
@@ -231,6 +252,71 @@ export function FloorMapView({
     // hurt drag responsiveness for no correctness benefit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function resizeTo(clientX: number, clientY: number) {
+    const r = bankResizeRef.current;
+    if (!r) return;
+    const w = Math.round(Math.min(MAX_BANK_W, Math.max(MANUAL_MIN_W, r.origW + (clientX - r.startX) / zoomRef.current)));
+    const h = Math.round(Math.min(MAX_BANK_H, Math.max(MANUAL_MIN_H, r.origH + (clientY - r.startY) / zoomRef.current)));
+    r.w = w;
+    r.h = h;
+    setBanks((bs) => bs.map((b) => (b.id === r.id ? { ...b, w, h } : b)));
+  }
+
+  function commitResize() {
+    const r = bankResizeRef.current;
+    bankResizeRef.current = null;
+    if (!r || (r.w === r.origW && r.h === r.origH)) return;
+    resizeBankAction(r.id, r.w, r.h)
+      .then(() => { showToast("Bank resized"); router.refresh(); })
+      .catch(() => { showToast("Could not resize bank"); router.refresh(); });
+  }
+
+  const onBankResizeDown = (e: React.MouseEvent | React.TouchEvent, bankId: string) => {
+    if (!editMode) return;
+    // React's touchstart is passive; the handle's `touch-action: none` already
+    // stops the browser panning/scrolling, so only mouse needs preventDefault.
+    if (!("touches" in e)) e.preventDefault();
+    e.stopPropagation();
+    const bank = banks.find((b) => b.id === bankId);
+    if (!bank) return;
+    const el = (e.currentTarget as HTMLElement).closest(".bank") as HTMLElement | null;
+    const origW = bank.w ?? BANK_W;
+    // Default-size banks have no stored height; start from what's rendered.
+    const origH = bank.h ?? Math.round(el?.offsetHeight ?? MANUAL_MIN_H);
+    const p = "touches" in e ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+    bankResizeRef.current = { id: bankId, startX: p.x, startY: p.y, origW, origH, w: origW, h: origH };
+  };
+
+  const resetBankSize = async (bankId: string) => {
+    try {
+      await resizeBankAction(bankId, null, null);
+      showToast("Bank size reset");
+    } catch { showToast("Could not reset bank size"); }
+    router.refresh();
+  };
+
+  function fitToPlan(plan: FloorPlanView) {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const z = Math.max(0.4, Math.min(1, (rect.width - 40) / (plan.width + 80), (rect.height - 40) / (plan.height + 80)));
+    setZoom(z);
+    setPanX(rect.width / 2 - (plan.originX + plan.width / 2) * z);
+    setPanY(rect.height / 2 - (plan.originY + plan.height / 2) * z);
+  }
+
+  // After an import, bring the new floor into view once the refreshed plans land.
+  useEffect(() => {
+    const areaKey = pendingFocusRef.current;
+    if (!areaKey) return;
+    const plan = plans.find((pl) => pl.areaKey === areaKey);
+    if (!plan) return;
+    pendingFocusRef.current = null;
+    const id = window.setTimeout(() => fitToPlan(plan), 0);
+    return () => window.clearTimeout(id);
+    // fitToPlan only reads refs and calls setters, so it isn't a dependency.
+  }, [plans]);
 
   async function commitDrag(d: { id: string; origX: number; origY: number }) {
     setBanks((current) => {
@@ -298,6 +384,12 @@ export function FloorMapView({
         setZoomAt(pinchRef.current.zoom * scale, midX, midY);
         return;
       }
+      if (bankResizeRef.current) {
+        e.preventDefault();
+        const p = getPoint(e);
+        resizeTo(p.x, p.y);
+        return;
+      }
       if (bankDragRef.current) {
         e.preventDefault();
         const d = bankDragRef.current;
@@ -324,6 +416,10 @@ export function FloorMapView({
         longPressTimerRef.current = null;
       }
       if (e.touches.length < 2) pinchRef.current = null;
+      if (bankResizeRef.current) {
+        commitResize();
+        return;
+      }
       if (bankDragRef.current) {
         const d = bankDragRef.current;
         bankDragRef.current = null;
@@ -586,6 +682,7 @@ export function FloorMapView({
     { icon: "↺", label: "Reset View", onClick: zoomReset },
     { icon: "↔", label: "Expand Width", onClick: growWidth },
     { icon: "↕", label: "Expand Map", onClick: () => growZone(areaList[areaList.length - 1].key) },
+    { icon: "🗺", label: "Floor Setup (CAD + Excel)", onClick: () => setSetupOpen(true) },
     { icon: "📄", label: "Download Template", onClick: downloadImportTemplate },
     { icon: "⭱", label: "Import from Excel", onClick: triggerImport },
     { icon: "⭳", label: "Export to Excel", onClick: doExport },
@@ -598,6 +695,15 @@ export function FloorMapView({
   return (
     <div className={fullscreen && variant === "mobile" ? "" : undefined}>
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleImportFile} />
+      {setupOpen && (
+        <FloorSetupDialog
+          plans={plans}
+          bankOptions={bankOptions}
+          onClose={() => setSetupOpen(false)}
+          onPlanApplied={(areaKey) => { pendingFocusRef.current = areaKey; router.refresh(); }}
+          onMachinesImported={() => router.refresh()}
+        />
+      )}
 
       {variant === "desktop" && (
         <div className="view-head">
@@ -610,6 +716,7 @@ export function FloorMapView({
             </div>
           </div>
           <div className="view-actions">
+            <button className="btn" onClick={() => setSetupOpen(true)}>🗺 Floor Setup</button>
             <button className="btn" onClick={downloadImportTemplate}>📄 Template</button>
             <button className="btn" onClick={triggerImport}>⭱ Import from Excel</button>
             <button className="btn" onClick={doExport}>⭳ Export to Excel</button>
@@ -622,10 +729,15 @@ export function FloorMapView({
 
       <div className={variant === "mobile" ? "m-map-legend" : "map-toolbar"}>
         <div className="map-legend">
-          {areaList.map((a) => (
+          {areaList.filter((a) => !plans.some((pl) => pl.areaKey === a.key)).map((a) => (
             <span className="map-legend-item" key={a.key}>
               <span className={`map-legend-dot ${AREA_DOT[a.key] ?? ""}`} />{a.label}
             </span>
+          ))}
+          {plans.map((pl) => (
+            <button key={pl.id} type="button" className="map-plan-chip" onClick={() => fitToPlan(pl)} title="Jump to this imported floor plan">
+              ⌖ {pl.name}
+            </button>
           ))}
         </div>
         <div className="combobox map-search" ref={mapSearchRef}>
@@ -702,6 +814,8 @@ export function FloorMapView({
               </div>
             ))}
 
+            {plans.map((pl) => <PlanOutline key={pl.id} plan={pl} />)}
+
             {banks.map((bank) => (
               <BankView
                 key={bank.id}
@@ -713,6 +827,8 @@ export function FloorMapView({
                 highlighted={bank.id === highlightBankId}
                 highlightSerial={bank.id === highlightBankId ? highlightSerial : null}
                 onHandleDown={onBankHandleDown}
+                onResizeDown={onBankResizeDown}
+                onResetSize={resetBankSize}
                 onAreaChange={setBankArea}
                 onCapacity={changeCapacity}
                 onSlotClick={(seat, occupied) => {
@@ -809,6 +925,21 @@ export function FloorMapView({
 
 const STATUS_CLASS: Record<string, string> = { VERIFIED: "status-verified", FLAGGED: "status-flagged", PENDING: "status-pending" };
 
+function PlanOutline({ plan }: { plan: FloorPlanView }) {
+  // Even-odd so courtyards / cut-outs in the outline render as holes.
+  const d = plan.outline.map((ring) => `M${ring.map((p) => `${p[0]},${p[1]}`).join("L")}Z`).join("");
+  return (
+    <svg
+      className="plan-outline"
+      style={{ left: plan.originX, top: plan.originY, width: plan.width, height: plan.height }}
+      viewBox={`0 0 ${plan.width} ${plan.height}`}
+      aria-label={`Floor outline — ${plan.name}`}
+    >
+      <path d={d} fillRule="evenodd" className="plan-outline-shape" />
+    </svg>
+  );
+}
+
 function BankView({
   bank,
   areaLabel,
@@ -818,6 +949,8 @@ function BankView({
   highlighted,
   highlightSerial,
   onHandleDown,
+  onResizeDown,
+  onResetSize,
   onAreaChange,
   onCapacity,
   onSlotClick,
@@ -832,6 +965,8 @@ function BankView({
   highlighted: boolean;
   highlightSerial: string | null;
   onHandleDown: (e: React.MouseEvent | React.TouchEvent, bankId: string) => void;
+  onResizeDown: (e: React.MouseEvent | React.TouchEvent, bankId: string) => void;
+  onResetSize: (bankId: string) => void;
   onAreaChange: (bankId: string, areaKey: string) => void;
   onCapacity: (bankId: string, delta: number) => void;
   onSlotClick: (seat: number, occupied: boolean) => void;
@@ -840,7 +975,10 @@ function BankView({
 }) {
   const occupiedCount = bank.seats.filter((s) => s).length;
   return (
-    <div className={`bank${editMode ? " edit-mode" : ""}${highlighted ? " bank-highlight" : ""}`} style={{ left: bank.x, top: bank.y, width: BANK_W }}>
+    <div
+      className={`bank${editMode ? " edit-mode" : ""}${highlighted ? " bank-highlight" : ""}${bank.footprint ? " bank-cad" : ""}`}
+      style={{ left: bank.x, top: bank.y, width: bank.w ?? BANK_W, ...(bank.h ? { minHeight: bank.h } : {}) }}
+    >
       <div className="bank-head">
         <div className="bank-name-row">
           {editMode && (
@@ -884,6 +1022,12 @@ function BankView({
           )}
         </div>
       </div>
+      {editMode && bank.w != null && (
+        <div className="bank-size-row mono">
+          <span>{bank.w} × {bank.h}px</span>
+          <button type="button" className="bank-size-reset" onClick={() => onResetSize(bank.id)}>↺ Reset size</button>
+        </div>
+      )}
       <div className="machines-row">
         {bank.seats.map((seat, i) => (
           <SlotView
@@ -898,6 +1042,21 @@ function BankView({
           />
         ))}
       </div>
+      {bank.footprint && (
+        // Exact CAD footprint, drawn over the card so true shape/position stays
+        // visible even when the card is larger than the footprint.
+        <svg className="bank-footprint" viewBox={`0 0 ${bank.w ?? BANK_W} ${bank.h ?? 0}`} style={{ width: bank.w ?? BANK_W, height: bank.h ?? 0 }}>
+          <polygon points={bank.footprint.map((p) => `${p[0]},${p[1]}`).join(" ")} />
+        </svg>
+      )}
+      {editMode && (
+        <div
+          className="bank-resize-handle"
+          title="Drag to resize this bank"
+          onMouseDown={(e) => onResizeDown(e, bank.id)}
+          onTouchStart={(e) => onResizeDown(e, bank.id)}
+        />
+      )}
     </div>
   );
 }
