@@ -13,7 +13,7 @@ import type { ColumnMapping, ImportFieldKey } from "@/lib/floor-plan/excel-colum
 import { DEFAULT_PLAN_WIDTH, MAX_PLAN_BANKS } from "@/lib/floor-plan/types";
 import type { BankOption, FloorPlanView } from "@/lib/data/floor";
 
-const IMPORT_CHUNK = 250;
+const IMPORT_CHUNK = 50;
 const MAX_DXF_BYTES = 60 * 1024 * 1024;
 const MAX_XLSX_BYTES = 25 * 1024 * 1024;
 
@@ -431,13 +431,22 @@ function ExcelStep({
     try {
       for (let i = 0; i < rows.length; i += IMPORT_CHUNK) {
         setBusy(`Importing machines… ${Math.min(i + IMPORT_CHUNK, rows.length)} / ${rows.length}`);
-        const res = await importMachinesAction(rows.slice(i, i + IMPORT_CHUNK), {
+        const chunk = rows.slice(i, i + IMPORT_CHUNK);
+        const opts = {
           fuzzyBankMatch: true,
           growToSeat: true,
-          unmatchedBanks: "skip",
+          unmatchedBanks: "skip" as const,
           bankAssignments: assignments,
           chunkLabel: `Floor setup, rows ${i + 1}–${Math.min(i + IMPORT_CHUNK, rows.length)}`,
-        });
+        };
+        let res;
+        try {
+          res = await importMachinesAction(chunk, opts);
+        } catch (first) {
+          // Transient "Load failed" / timeout on big previews — one retry.
+          await new Promise((r) => setTimeout(r, 800));
+          res = await importMachinesAction(chunk, opts);
+        }
         totals.created += res.created;
         totals.updated += res.updated;
         totals.banksCreated += res.banksCreated;

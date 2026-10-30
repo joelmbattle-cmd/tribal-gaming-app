@@ -4,7 +4,7 @@
 // import action already understands.
 
 export const IMPORT_FIELDS = [
-  { key: "Serial Number", required: true, aliases: ["serial number", "serial", "serial no", "serial #", "serialnumber", "sn", "egm serial", "machine serial"] },
+  { key: "Serial Number", required: true, aliases: ["serial number", "serial", "serial no", "serial #", "serial#", "serialnumber", "sn", "egm serial", "machine serial"] },
   { key: "Bank", required: true, aliases: ["bank", "bank id", "bank name", "bank number", "bank no", "bank #", "bank code", "location"] },
   { key: "Seat", required: false, aliases: ["seat", "seat number", "seat no", "seat #", "position", "pos", "slot", "stand"] },
   { key: "Asset Number", required: false, aliases: ["asset number", "asset", "asset no", "asset #", "asset tag", "asset id"] },
