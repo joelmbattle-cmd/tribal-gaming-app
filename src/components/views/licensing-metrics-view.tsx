@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { computeLicensingMetrics, monthPeriod, rangePeriod, type LicensingMetricsPerson } from "@/lib/licensing-metrics";
+import { csvFilename, downloadCsv, licensingMetricsToCsv } from "@/lib/licensing-metrics-csv";
+import { InvestigationsColumnChart, OutcomesPieChart, investigationSeries, outcomeSeries } from "@/components/views/licensing-metrics-charts";
+import { useToast } from "@/components/toast";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -49,11 +52,23 @@ export function LicensingMetricsView({ people }: { people: LicensingMetricsPerso
   const periodLabel = mode === "month" ? formatMonthLabel(monthValue) : `${rangeFrom || "…"} – ${rangeTo || "…"}`;
 
   const metrics = useMemo(() => computeLicensingMetrics(people, period), [people, period]);
+  const showToast = useToast();
+
+  function exportCsv() {
+    const name = csvFilename(periodLabel);
+    downloadCsv(name, licensingMetricsToCsv(metrics, periodLabel));
+    showToast(`Exported ${name}`);
+  }
 
   return (
     <div>
       <div className="view-title">Licensing Metrics &amp; Reporting</div>
-      <div className="view-sub">Licensing-only metrics for the selected period. No Compliance data is shown on this page.</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div className="view-sub">Licensing-only metrics for the selected period. No Compliance data is shown on this page.</div>
+        <button className="btn btn-primary" onClick={exportCsv}>
+          Export CSV
+        </button>
+      </div>
 
       <div className="folder-tabs" style={{ marginTop: 18 }}>
         <button className={`folder-tab${mode === "month" ? " folder-tab-active" : ""}`} onClick={() => setMode("month")}>
@@ -142,6 +157,12 @@ export function LicensingMetricsView({ people }: { people: LicensingMetricsPerso
           <div className="metric-label">Separated</div>
           <div className="metric-sub">Licensee separated</div>
         </div>
+      </div>
+
+      <div className="section-label">Charts — {periodLabel}</div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <OutcomesPieChart data={outcomeSeries(metrics)} periodLabel={periodLabel} />
+        <InvestigationsColumnChart data={investigationSeries(metrics)} periodLabel={periodLabel} />
       </div>
     </div>
   );
