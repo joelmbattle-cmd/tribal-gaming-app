@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { LEGACY_EXCEL_IMPORT_ENABLED } from "@/lib/import-gate";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
@@ -161,7 +162,7 @@ export function MachineListView({
     : [
         { icon: "+", label: "New Machine", onClick: () => setShowCreateForm(true) },
         { icon: "📄", label: "Download Template", onClick: downloadImportTemplate },
-        { icon: "⭱", label: "Import from Excel", onClick: triggerImport },
+        ...(LEGACY_EXCEL_IMPORT_ENABLED ? [{ icon: "⭱", label: "Import from Excel (legacy, dev only)", onClick: triggerImport }] : []),
         { icon: "⭳", label: "Export to Excel", onClick: doExport },
       ];
 
@@ -185,7 +186,7 @@ export function MachineListView({
               <>
                 <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>+ New Machine</button>
                 <button className="btn" onClick={downloadImportTemplate}>📄 Template</button>
-                <button className="btn" onClick={triggerImport}>⭱ Import from Excel</button>
+                {LEGACY_EXCEL_IMPORT_ENABLED && <button className="btn" onClick={triggerImport}>⭱ Import from Excel (legacy)</button>}
               </>
             )}
             <button className="btn" onClick={doExport}>⭳ Export to Excel</button>

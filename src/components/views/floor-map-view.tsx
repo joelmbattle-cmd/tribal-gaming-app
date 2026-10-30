@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LEGACY_EXCEL_IMPORT_ENABLED } from "@/lib/import-gate";
 import { useShellVariant } from "@/components/shell-variant";
 import { useToast } from "@/components/toast";
 import { ResponsiveOverlay } from "@/components/overlay";
@@ -690,7 +691,7 @@ export function FloorMapView({
     { icon: "↕", label: "Expand Map", onClick: () => growZone(areaList[areaList.length - 1].key) },
     { icon: "🗺", label: "Floor Setup (CAD + Excel)", onClick: () => setSetupOpen(true) },
     { icon: "📄", label: "Download Template", onClick: downloadImportTemplate },
-    { icon: "⭱", label: "Import from Excel", onClick: triggerImport },
+    ...(LEGACY_EXCEL_IMPORT_ENABLED ? [{ icon: "⭱", label: "Import from Excel (legacy, dev only)", onClick: triggerImport }] : []),
     { icon: "⭳", label: "Export to Excel", onClick: doExport },
   ];
 
@@ -724,7 +725,7 @@ export function FloorMapView({
           <div className="view-actions">
             <button className="btn" onClick={() => setSetupOpen(true)}>🗺 Floor Setup</button>
             <button className="btn" onClick={downloadImportTemplate}>📄 Template</button>
-            <button className="btn" onClick={triggerImport}>⭱ Import from Excel</button>
+            {LEGACY_EXCEL_IMPORT_ENABLED && <button className="btn" onClick={triggerImport}>⭱ Import from Excel (legacy)</button>}
             <button className="btn" onClick={doExport}>⭳ Export to Excel</button>
             <button className={`btn${editMode ? " btn-active" : ""}`} onClick={toggleEditMode}>
               {editMode ? "✓ Done Editing" : "✎ Edit Layout"}
